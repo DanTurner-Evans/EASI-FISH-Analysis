@@ -4,6 +4,9 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 
+# Raw microscopy data (~260 GB) lives outside git
+*.czi
+
 # Derived data is regenerable from data/raw/
 data/processed/
 
