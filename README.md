@@ -3,7 +3,7 @@
 ## Overview
 Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8) data of octopamine receptor-related mRNAs in the ring neurons of the *Drosophila* central complex
 
-## Description of the data
+## Data naming convention
 
 | Label | Line name | Neuron type |
 |-------|-----------|-------------|
@@ -18,4 +18,19 @@ Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8
 | 2     | Oct $\beta$ 1R-B3  | Oct $\beta$ 2R-B4  |
 | 3     | Oct $\alpha$ 2R-B2 | Oct $\beta$ 3R-B5  |
 
-https://www.neuroai.science/p/claude-code-for-scientists
+The data consists of czi files with the naming convention {letter}{number}_brain{sample_number}{view}.
+The letter corresponds to the genetic line used, as outlined in the first table above.
+The number corresponds to the subset of receptors-related mRNAs tagged, as outlies in the second table above.
+The view can be blank, a, or b, depending on how many different configurations were used to image the brain.
+
+## Data structure
+
+Each czi file has four color channels, recorded in a z stack throughout the brain.
+The green channel is a membrane tag for neurons in the given genetic line.
+The 546 and 647 nm channels are the mRNA probes, as desrobed in the second table in the *Data naming convention* section
+The
+
+## Analysis approach
+1. Determine which voxels map to the neuron of interest
+2. Localize the mRNAs
+3. Coloclaize the mRNAs with the neuron voxels to determine how many mRNAs are in each cell type.
