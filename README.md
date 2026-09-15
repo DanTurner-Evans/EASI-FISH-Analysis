@@ -15,7 +15,7 @@ Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8
 | Label | receptor 1, 546 nm | receptor 2, 647 nm |
 |-------|--------------------|--------------------|
 | 1     | Oamb-B1            | Oct-TyR_B3         |
-| 2     | Oct$\beta1R-B3     | Oct$\beta2R-B4     |
-| 3     | Ocet$\alpha2R-B2   | Oct$\beta3R-B5     |
+| 2     | Oct $\beta 1R-B3   | Oct $\beta 2R-B4   |
+| 3     | Oct $\alpha 2R-B2  | Oct $\beta 3R-B5   |
 
 https://www.neuroai.science/p/claude-code-for-scientists
