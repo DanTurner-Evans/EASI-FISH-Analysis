@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+
+# Derived data is regenerable from data/raw/
+data/processed/
+
+# Snakemake bookkeeping
+.snakemake/
+logs/

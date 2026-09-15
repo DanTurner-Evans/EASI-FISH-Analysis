@@ -1,0 +1,134 @@
+import re
+from pathlib import Path
+
+configfile: "config/config.yaml"
+
+RAW_DIR = Path("data/raw")
+
+# Filenames look like A2_brain2, C1_brain1a, D3_brain1b:
+#   <line letter><receptor set digit>_brain<number><optional a/b suffix>
+SAMPLE_RE = re.compile(r"^(?P<line>[A-D])(?P<rset>[1-3])_brain(?P<brain>\d+[a-z]?)$")
+
+
+def discover_samples():
+    """Sample IDs are CZI stems in data/raw. Malformed names fail loudly rather
+    than being silently dropped from the run."""
+    found, bad = [], []
+    for path in sorted(RAW_DIR.glob("*.czi")):
+        (found if SAMPLE_RE.match(path.stem) else bad).append(path.stem)
+    if bad:
+        raise WorkflowError(
+            "Raw filenames do not match <line><set>_brain<n>: " + ", ".join(bad)
+        )
+    return found
+
+
+SAMPLES = discover_samples()
+
+
+def meta(sample):
+    """Metadata implied by a sample ID, resolved through config.yaml."""
+    m = SAMPLE_RE.match(sample).groupdict()
+    return {
+        "line_label": m["line"],
+        "brain": m["brain"],
+        "receptor_set": m["rset"],
+        **config["lines"][m["line"]],
+        "receptors": config["receptor_sets"][m["rset"]],
+    }
+
+
+wildcard_constraints:
+    sample=r"[A-D][1-3]_brain\d+[a-z]?",
+    channel=r"\d{3}",
+
+
+rule all:
+    input:
+        "results/tables/spot_counts.csv",
+        "results/figures/counts_by_receptor.pdf",
+
+
+rule ingest:
+    """Read the CZI once and write chunked zarr; every later rule reads this."""
+    input:
+        RAW_DIR / "{sample}.czi",
+    output:
+        directory("data/processed/{sample}/image.zarr"),
+    resources:
+        mem_mb=16000,
+    log:
+        "logs/ingest/{sample}.log",
+    script:
+        "scripts/ingest.py"
+
+
+rule segment:
+    """Label ring-neuron cell bodies from the reporter channel."""
+    input:
+        "data/processed/{sample}/image.zarr",
+    output:
+        "data/processed/{sample}/labels.tif",
+    params:
+        channel_index=config["segmentation_channel"],
+    resources:
+        mem_mb=32000,
+    log:
+        "logs/segment/{sample}.log",
+    script:
+        "scripts/segment.py"
+
+
+rule detect_spots:
+    """Detect mRNA puncta in one channel. Runs once per sample per channel."""
+    input:
+        "data/processed/{sample}/image.zarr",
+    output:
+        "data/processed/{sample}/spots_{channel}.csv",
+    params:
+        detection=lambda wc: config["spot_detection"][wc.channel],
+    resources:
+        mem_mb=32000,
+    log:
+        "logs/detect_spots/{sample}_{channel}.log",
+    script:
+        "scripts/detect_spots.py"
+
+
+rule count_per_cell:
+    """Assign puncta to labelled cells and emit a tidy per-cell table."""
+    input:
+        labels=  "data/processed/{sample}/labels.tif",
+        spots=   expand("data/processed/{{sample}}/spots_{channel}.csv",
+                        channel=config["channels"]),
+    output:
+        "data/processed/{sample}/counts.csv",
+    params:
+        meta=lambda wc: meta(wc.sample),
+        channels=config["channels"],
+    log:
+        "logs/count_per_cell/{sample}.log",
+    script:
+        "scripts/count_per_cell.py"
+
+
+rule aggregate:
+    input:
+        expand("data/processed/{sample}/counts.csv", sample=SAMPLES),
+    output:
+        "results/tables/spot_counts.csv",
+    log:
+        "logs/aggregate.log",
+    script:
+        "scripts/aggregate.py"
+
+
+rule figures:
+    input:
+        "results/tables/spot_counts.csv",
+    output:
+        "results/figures/counts_by_receptor.pdf",
+    log:
+        "logs/figures.log",
+    script:
+        "scripts/plot_counts.py"

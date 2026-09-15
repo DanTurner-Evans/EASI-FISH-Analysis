@@ -1,0 +1,24 @@
+# Channel wavelengths present in every CZI.
+channels: ["546", "647"]
+
+# Driver line encoded by the leading letter of the filename (see README).
+lines:
+  A: {driver: SS67611, neuron_type: "ER3p_a/b"}
+  B: {driver: SS17020, neuron_type: "ER1_a"}
+  C: {driver: SS00238, neuron_type: "ER4d"}
+  D: {driver: SS04766, neuron_type: "ER3p_a/b"}
+
+# Receptor pair encoded by the digit of the filename (see README).
+receptor_sets:
+  "1": {"546": "Oamb-B1",     "647": "Oct-TyR_B3"}
+  "2": {"546": "Octb1R-B3",   "647": "Octb2R-B4"}
+  "3": {"546": "Octa2R-B2",   "647": "Octb3R-B5"}
+
+# Spot-detection parameters, per channel. TUNE THESE on a known sample before
+# trusting any counts downstream.
+spot_detection:
+  "546": {min_sigma: 1.0, max_sigma: 3.0, threshold: 0.02}
+  "647": {min_sigma: 1.0, max_sigma: 3.0, threshold: 0.02}
+
+# Index of the channel used to segment cell bodies (the driver-line reporter).
+segmentation_channel: 0

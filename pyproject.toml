@@ -1,0 +1,23 @@
+[project]
+name = "easi-fish-analysis"
+version = "0.1.0"
+description = "Analysis of EASI-FISH data of octopamine receptor-related mRNAs in Drosophila central complex ring neurons"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "scikit-image",
+    "bioio>=3.5.1",
+    "bioio-czi>=2.9.1",
+    "zarr>=3.1.6",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "jupyterlab",
+    "snakemake>=9.27.0",
+]
