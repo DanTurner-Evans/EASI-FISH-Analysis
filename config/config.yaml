@@ -22,3 +22,14 @@ spot_detection:
 
 # Index of the channel used to segment cell bodies (the driver-line reporter).
 segmentation_channel: 0
+
+# Scans excluded from the analysis: QC/test acquisitions that predate the
+# naming convention. Listing them here is deliberate — any other unrecognised
+# filename aborts the run rather than being silently skipped.
+# NOTE: this leaves the A1 condition (SS67611 x Oamb-B1/Oct-TyR_B3) with no data.
+exclude:
+  - A1_check
+  - A1_checkbrain2
+  - A1_checkbrain2_otherneurons
+  - A1_GFP
+  - A1_test

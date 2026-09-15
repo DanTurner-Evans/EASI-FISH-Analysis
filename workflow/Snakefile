@@ -7,20 +7,34 @@ RAW_DIR = Path("data/raw")
 
 # Filenames look like A2_brain2, C1_brain1a, D3_brain1b:
 #   <line letter><receptor set digit>_brain<number><optional a/b suffix>
-SAMPLE_RE = re.compile(r"^(?P<line>[A-D])(?P<rset>[1-3])_brain(?P<brain>\d+[a-z]?)$")
+SAMPLE_RE = re.compile(r"^(?P<line>[A-D])(?P<rset>[1-3])_brain(?P<brain>\d+[a-z]*)$")
 
 
 def discover_samples():
-    """Sample IDs are CZI stems in data/raw. Malformed names fail loudly rather
-    than being silently dropped from the run."""
+    """Sample IDs are CZI stems found anywhere under data/raw (the CZIs live in
+    per-line subdirectories). Names that are neither a valid sample nor an
+    explicitly excluded scan fail loudly rather than being silently dropped."""
+    excluded = set(config.get("exclude", []))
     found, bad = [], []
-    for path in sorted(RAW_DIR.glob("*.czi")):
+    for path in sorted(RAW_DIR.rglob("*.czi")):
+        if path.stem in excluded:
+            continue
         (found if SAMPLE_RE.match(path.stem) else bad).append(path.stem)
     if bad:
         raise WorkflowError(
-            "Raw filenames do not match <line><set>_brain<n>: " + ", ".join(bad)
+            "Raw filenames are neither <line><set>_brain<n> nor listed under "
+            "'exclude' in config.yaml: " + ", ".join(sorted(bad))
+        )
+    duplicates = {s for s in found if found.count(s) > 1}
+    if duplicates:
+        raise WorkflowError(
+            "Duplicate sample IDs across subdirectories: " + ", ".join(sorted(duplicates))
         )
     return found
+
+
+# CZIs are nested per line, so the path cannot be derived from the sample ID alone.
+RAW_PATHS = {p.stem: p for p in sorted(RAW_DIR.rglob("*.czi"))}
 
 
 SAMPLES = discover_samples()
@@ -39,7 +53,7 @@ def meta(sample):
 
 
 wildcard_constraints:
-    sample=r"[A-D][1-3]_brain\d+[a-z]?",
+    sample=r"[A-D][1-3]_brain\d+[a-z]*",
     channel=r"\d{3}",
 
 
@@ -52,7 +66,7 @@ rule all:
 rule ingest:
     """Read the CZI once and write chunked zarr; every later rule reads this."""
     input:
-        RAW_DIR / "{sample}.czi",
+        lambda wc: RAW_PATHS[wc.sample],
     output:
         directory("data/processed/{sample}/image.zarr"),
     resources:
