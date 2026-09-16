@@ -4,9 +4,9 @@ channels: ["546", "647"]
 # Driver line encoded by the leading letter of the filename (see README).
 lines:
   A: {driver: SS67611, neuron_type: "ER3p_a/b"}
-  B: {driver: SS17020, neuron_type: "ER1_a"}
+  B: {driver: SS04766, neuron_type: "ER3p_a/b"}
   C: {driver: SS00238, neuron_type: "ER4d"}
-  D: {driver: SS04766, neuron_type: "ER3p_a/b"}
+  D: {driver: SS17020, neuron_type: "ER1_a"}
 
 # Receptor pair encoded by the digit of the filename (see README).
 receptor_sets:

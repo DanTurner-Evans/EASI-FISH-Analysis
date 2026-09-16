@@ -8,9 +8,9 @@ Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8
 | Label | Line name | Neuron type |
 |-------|-----------|-------------|
 | A     | SS67611   | ER3p_a/b    |
-| B     | SS17020   | ER1_a       |
+| B     | SS04766   | ER3p_a/b    |
 | C     | SS00238   | ER4d        |
-| D     | SS04766   | ER3p_a/b    |
+| D     | SS17020   | ER1_a       |
 
 | Label | receptor 1, 546 nm | receptor 2, 647 nm |
 |-------|--------------------|--------------------|
@@ -28,7 +28,7 @@ The view can be blank, a, or b, depending on how many different configurations w
 Each czi file has four color channels, recorded in a z stack throughout the brain.
 The green channel is a membrane tag for neurons in the given genetic line.
 The 546 and 647 nm channels are the mRNA probes, as described in the second table in the *Data naming convention* section
-The
+The fourth channel is DAPI staining.
 
 ## Analysis approach
 1. Determine which voxels map to the neuron of interest
