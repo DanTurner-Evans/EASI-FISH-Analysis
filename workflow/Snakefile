@@ -137,6 +137,34 @@ rule aggregate:
         "scripts/aggregate.py"
 
 
+rule mips:
+    """Target: membrane-channel MIPs for every CZI, including excluded QC scans."""
+    input:
+        expand("results/figures/mip/{sample}_membrane_mip.png", sample=RAW_PATHS),
+
+
+rule mip:
+    """Maximum intensity projection of the membrane-tag channel, for QC. Reads
+    the CZI directly (see script) so it needs no ingested zarr."""
+    input:
+        lambda wc: RAW_PATHS[wc.sample],
+    output:
+        "results/figures/mip/{sample}_membrane_mip.png",
+    wildcard_constraints:
+        # Any CZI stem, so excluded QC scans can be inspected too.
+        sample="|".join(map(re.escape, RAW_PATHS)),
+    params:
+        channel_index=config["segmentation_channel"],
+        mip=config["mip"],
+    resources:
+        # Largest stack is 365 x 1920 x 1920 uint16 (~2.7 GB) for one channel.
+        mem_mb=6000,
+    log:
+        "logs/mip/{sample}.log",
+    script:
+        "scripts/mip.py"
+
+
 rule figures:
     input:
         "results/tables/spot_counts.csv",

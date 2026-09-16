@@ -23,6 +23,11 @@ spot_detection:
 # Index of the channel used to segment cell bodies (the driver-line reporter).
 segmentation_channel: 0
 
+# Display settings for the membrane-channel maximum intensity projections.
+mip:
+  percentiles: [0.5, 99.8]  # intensity percentiles mapped to black and full green
+  scale_bar_um: 50
+
 # Scans excluded from the analysis: QC/test acquisitions that predate the
 # naming convention. Listing them here is deliberate — any other unrecognised
 # filename aborts the run rather than being silently skipped.
