@@ -1,0 +1,53 @@
+"""Keep candidate puncta above the amplitude threshold and draw a QC figure.
+
+The figure shows the amplitude histogram with the threshold, and kept (green)
+versus rejected (red) spots on a max projection of the densest region. The
+noise population should sit left of the line and the puncta peak to its right.
+"""
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import zarr
+
+from common import channel_index, setup_logging
+
+log = setup_logging(snakemake)  # noqa: F821
+
+candidates = pd.read_csv(snakemake.input.candidates)
+threshold = snakemake.params.min_amplitude
+keep = candidates.amplitude >= threshold
+candidates[keep].to_csv(snakemake.output.spots, index=False)
+log.info("kept %d/%d candidates with amplitude >= %s", keep.sum(), len(candidates), threshold)
+
+fig, (ax_hist, ax_img) = plt.subplots(1, 2, figsize=(14, 6.5))
+bins = np.logspace(0, 5, 80)
+ax_hist.hist(candidates.amplitude.clip(1, None), bins, color="0.6")
+ax_hist.axvline(threshold, color="r")
+ax_hist.set(xscale="log", xlabel="amplitude (counts above local background)", ylabel="candidates",
+            title=f"{keep.sum()} of {len(candidates)} kept")
+
+# Densest 400 x 400 px region, so the overlay shows the filter where it matters.
+store = zarr.open(snakemake.input.image, mode="r")
+volume = store[channel_index(store, snakemake.params.emission_nm)]
+half = 200
+if len(candidates):
+    counts, ye, xe = np.histogram2d(candidates.y, candidates.x, bins=[volume.shape[1] // half] * 2,
+                                    range=[[0, volume.shape[1]], [0, volume.shape[2]]])
+    iy, ix = np.unravel_index(counts.argmax(), counts.shape)
+    cy, cx = int((ye[iy] + ye[iy + 1]) / 2), int((xe[ix] + xe[ix + 1]) / 2)
+else:
+    cy, cx = volume.shape[1] // 2, volume.shape[2] // 2
+y0, x0 = max(cy - half, 0), max(cx - half, 0)
+mip = np.asarray(volume[:, y0:y0 + 2 * half, x0:x0 + 2 * half]).max(axis=0)
+ax_img.imshow(mip, cmap="gray", vmin=np.percentile(mip, 1), vmax=np.percentile(mip, 99.8))
+inside = candidates.y.between(y0, y0 + 2 * half) & candidates.x.between(x0, x0 + 2 * half)
+for mask, colour in [(inside & keep, "lime"), (inside & ~keep, "red")]:
+    ax_img.scatter(candidates.x[mask] - x0, candidates.y[mask] - y0, s=40,
+                   facecolors="none", edgecolors=colour, linewidths=0.8)
+ax_img.set(title=f"max projection, y {y0}, x {x0}: kept (green) / rejected (red)", xticks=[], yticks=[])
+fig.suptitle(f"{snakemake.wildcards.sample}  {snakemake.wildcards.channel}")
+fig.tight_layout()
+fig.savefig(snakemake.output.qc, dpi=80)

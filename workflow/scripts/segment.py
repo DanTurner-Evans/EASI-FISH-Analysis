@@ -1,36 +1,188 @@
-"""Label ring-neuron cell bodies from the reporter channel.
+"""Segment the somata of driver-line neurons from the membrane channel.
 
-PLACEHOLDER SEGMENTATION. The Otsu + watershed approach below is a structurally
-correct starting point, not a validated one — inspect the labels against a known
-sample and replace this with Cellpose or a tuned classical pipeline before
-trusting any counts downstream.
+1. Membrane outline: voxels above a global threshold that are also bright
+   relative to the brightest membrane within local_window_um. The relative test
+   cuts the out-of-focus glow that a bright soma throws over its neighbours.
+   Small gaps are closed, enclosed holes filled (in 3D and per plane), and
+   anything thinner than neurite_um (neurites, fibre bundles) is opened away.
+2. Nuclei: Cellpose on DAPI, in the box around the outline. A
+   nucleus belongs to a labelled neuron if most of its core (deeper than
+   nucleus_core_um inside it) lies within the outline; unlabelled neighbours
+   only touch the outline with their edges. Nuclei in neuropil (surrounded by
+   solid outline) are rejected.
+3. Somata: each outline voxel within max_soma_radius_um of a labelled nucleus
+   goes to the nearest one. (A watershed on membrane intensity lets a soma
+   flood along the bright shell of the soma stacked below it.)
+4. Outline components with no labelled nucleus at all are kept as
+   nucleus-free cells (has_nucleus = False) if soma-sized.
+   Neuropil also ends up here (e.g. bulb glomeruli in C1_brain1a, which lie
+   among visible nuclei yet contain none), so check the QC figure before
+   using them.
+
+Everything runs on a grid downsampled by `downsample` (near-isotropic ~0.5 um
+voxels); the label images are written on that grid. A cell with a nucleus
+takes the nucleus's ID, so nuclei_labels.tif identifies each soma's nucleus.
 """
-import numpy as np
-import tifffile
-import zarr
-from scipy import ndimage as ndi
-from skimage.feature import peak_local_max
-from skimage.filters import threshold_otsu
-from skimage.segmentation import watershed
+import matplotlib
 
-from common import setup_logging
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import tifffile
+import torch
+import zarr
+from cellpose import models
+from scipy import ndimage as ndi
+from skimage.measure import block_reduce
+from skimage.segmentation import find_boundaries
+
+from common import channel_index, setup_logging
 
 log = setup_logging(snakemake)  # noqa: F821
 
+p = snakemake.params.segmentation
 store = zarr.open(snakemake.input[0], mode="r")
-reporter = np.asarray(store[snakemake.params.channel_index])
-log.info("segmenting channel %d, shape %s", snakemake.params.channel_index, reporter.shape)
+block = tuple(p["downsample"])
+vox = np.array(store.attrs["physical_pixel_sizes"]) * block
 
-smoothed = ndi.gaussian_filter(reporter.astype(np.float32), sigma=(1, 2, 2))
-mask = smoothed > threshold_otsu(smoothed)
-mask = ndi.binary_opening(mask, iterations=2)
 
-# Split touching somata by distance-transform watershed.
-distance = ndi.distance_transform_edt(mask)
-peaks = peak_local_max(distance, labels=mask, min_distance=10, exclude_border=False)
-markers = np.zeros(distance.shape, dtype=np.int32)
-markers[tuple(peaks.T)] = np.arange(1, len(peaks) + 1)
-labels = watershed(-distance, markers, mask=mask)
+def load(emission_nm):
+    return block_reduce(np.asarray(store[channel_index(store, emission_nm)]),
+                        block, np.mean).astype(np.float32)
 
-log.info("labelled %d objects", labels.max())
-tifffile.imwrite(snakemake.output[0], labels.astype(np.uint16))
+
+def ball(radius_um):
+    """Ellipsoidal footprint of the given physical radius on the anisotropic grid."""
+    r = np.floor(radius_um / vox).astype(int)
+    z, y, x = np.ogrid[-r[0]:r[0] + 1, -r[1]:r[1] + 1, -r[2]:r[2] + 1]
+    return (z * vox[0]) ** 2 + (y * vox[1]) ** 2 + (x * vox[2]) ** 2 <= radius_um ** 2
+
+
+membrane = load(p["membrane_emission_nm"])
+dapi = load(p["nuclei_emission_nm"])
+log.info("grid %s, voxel %s um", membrane.shape, vox.round(3))
+
+# --- 1. membrane outline ------------------------------------------------------------
+smooth = ndi.gaussian_filter(membrane, 0.5)
+median = np.median(smooth)
+mad = 1.4826 * np.median(np.abs(smooth - median))
+local_max = ndi.maximum_filter(smooth, footprint=ball(p["local_window_um"]))
+fg = (smooth > median + p["membrane_threshold_mads"] * mad) & \
+     (smooth - median > p["local_contrast"] * (local_max - median))
+closed = ndi.binary_closing(fg, ball(p["close_um"]), border_value=0)
+filled = ndi.binary_fill_holes(closed) | np.stack([ndi.binary_fill_holes(plane) for plane in closed])
+outline = ndi.binary_opening(filled, ball(p["neurite_um"]))
+components, n_components = ndi.label(outline)
+log.info("membrane foreground %.3f%% of voxels; outline %.3f%% in %d components",
+         100 * fg.mean(), 100 * outline.mean(), n_components)
+
+# --- 2. nuclei, in one box around the outline --------------------------------------
+# One box, not one per component: Cellpose-SAM misses nuclei in small crops
+# (a D3_brain2a nucleus found in the whole volume was lost in crops of 96-192 px).
+min_soma, max_soma = p["soma_volume_um3"]
+component_volume = ndi.sum_labels(np.ones_like(components), components,
+                                  np.arange(1, n_components + 1)) * vox.prod()
+big = np.isin(components, np.flatnonzero(component_volume >= min_soma) + 1)
+nuclei = np.zeros(dapi.shape, np.int32)
+if big.any():
+    pad = np.ceil(8.0 / vox).astype(int)
+    lo = np.maximum(np.argwhere(big).min(0) - pad, 0)
+    hi = np.minimum(np.argwhere(big).max(0) + pad + 1, dapi.shape)
+    box = tuple(slice(a, b) for a, b in zip(lo, hi))
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    model = models.CellposeModel(gpu=device.type != "cpu", device=device)
+    masks, _, _ = model.eval(dapi[box], do_3D=True, z_axis=0, anisotropy=vox[0] / vox[1])
+    nuclei[box] = masks
+    log.info("Cellpose on box %s: %d nuclei", dapi[box].shape, masks.max())
+
+ids = np.unique(nuclei[nuclei > 0])
+volume = ndi.sum_labels(np.ones_like(nuclei), nuclei, ids) * vox.prod()
+min_nucleus, max_nucleus = p["nucleus_volume_um3"]  # outside: fragments, glia, merged nuclei
+sized = (volume >= min_nucleus) & (volume <= max_nucleus)
+nuclei[np.isin(nuclei, ids[~sized])] = 0
+ids, volume = ids[sized], volume[sized]
+depth = ndi.distance_transform_edt(nuclei > 0, sampling=vox)
+core = (depth >= p["nucleus_core_um"]) & (nuclei > 0)
+inside = np.nan_to_num(ndi.mean(outline[core], nuclei[core], ids))
+labelled = ids[inside >= p["min_nucleus_inside"]]
+# Neuropil is solid outline, so any nucleus within it (glia) counts as inside.
+# Share out the space within neuropil_check_um of labelled nuclei, each voxel
+# to the nearest: a soma's share is mostly empty beyond its own outline (or
+# claimed by its neighbours), while a nucleus in neuropil is surrounded by it.
+dist, nearest = ndi.distance_transform_edt(~np.isin(nuclei, labelled), sampling=vox, return_indices=True)
+share = np.where(dist <= p["neuropil_check_um"], nuclei[tuple(nearest)], 0)
+crowding = ndi.mean(outline, share, labelled)
+log.info("%d nuclei of %s-%s um3; %d with core inside outline >= %s, %d of them in neuropil "
+         "(outline fills > %s of their share)", len(ids), min_nucleus, max_nucleus, len(labelled),
+         p["min_nucleus_inside"], (crowding > p["max_crowding"]).sum(), p["max_crowding"])
+labelled = labelled[crowding <= p["max_crowding"]]
+
+# --- 3. somata grown from labelled nuclei -----------------------------------------
+is_labelled = np.isin(nuclei, labelled)
+dist, nearest = ndi.distance_transform_edt(~is_labelled, sampling=vox, return_indices=True)
+soma = np.where((outline & (dist <= p["max_soma_radius_um"])) | is_labelled,
+                nuclei[tuple(nearest)], 0)
+# Fill each soma's enclosed holes, without taking voxels from a neighbour.
+for k, box in enumerate(ndi.find_objects(soma), 1):
+    if box is None:
+        continue
+    own = ndi.binary_fill_holes(soma[box] == k)
+    own = np.stack([ndi.binary_fill_holes(plane) for plane in own])
+    soma[box][own & (soma[box] == 0)] = k
+
+# --- 4. nucleus-free cells ---------------------------------------------------------
+# Only whole components of soma size: cutting larger ones up turns neuropil
+# (ellipsoid body, bulb) into soma-sized pieces.
+has_labelled = np.unique(components[is_labelled & outline])
+orphans = [c for c in range(1, n_components + 1)
+           if c not in has_labelled and min_soma <= component_volume[c - 1] <= max_soma]
+orphan_ids = list(range(int(nuclei.max()) + 1, int(nuclei.max()) + 1 + len(orphans)))
+for c, k in zip(orphans, orphan_ids):
+    soma[components == c] = k
+log.info("%d nucleus-free cells (components of %s-%s um3 without a labelled nucleus)",
+         len(orphan_ids), min_soma, max_soma)
+
+# --- table and label images ------------------------------------------------------
+cell_ids = np.concatenate([labelled, orphan_ids]).astype(int)
+centres = np.array(ndi.center_of_mass(soma > 0, soma, cell_ids)).reshape(-1, 3) * vox
+edge = np.zeros(soma.shape, bool)
+for axis in range(3):
+    edge[(slice(None),) * axis + (0,)] = edge[(slice(None),) * axis + (-1,)] = True
+nucleus_volume = dict(zip(ids, volume))
+nucleus_inside = dict(zip(ids, inside))
+table = pd.DataFrame({
+    "cell_id": cell_ids,
+    "has_nucleus": np.isin(cell_ids, labelled),
+    "z_um": centres[:, 0], "y_um": centres[:, 1], "x_um": centres[:, 2],
+    "soma_volume_um3": ndi.sum_labels(np.ones_like(soma), soma, cell_ids) * vox.prod(),
+    "nucleus_volume_um3": [nucleus_volume.get(k, np.nan) for k in cell_ids],
+    "nucleus_inside": [nucleus_inside.get(k, np.nan) for k in cell_ids],
+    # A soma cut by the edge of the volume is only partly imaged, so undercounted.
+    "touches_edge": np.isin(cell_ids, np.unique(soma[edge])),
+})
+table.to_csv(snakemake.output.table, index=False)
+for path, labels in [(snakemake.output.soma, soma), (snakemake.output.nuclei, nuclei)]:
+    tifffile.imwrite(path, labels.astype(np.uint16), imagej=True, resolution=(1 / vox[2], 1 / vox[1]),
+                     metadata={"axes": "ZYX", "spacing": vox[0], "unit": "um"})
+log.info("soma volumes (um3): %s", table.soma_volume_um3.round().tolist())
+
+# --- QC: membrane MIP with cell outlines, and the nucleus score distribution --------
+fig, (ax_img, ax_hist) = plt.subplots(1, 2, figsize=(15, 7), gridspec_kw={"width_ratios": [1.6, 1]})
+mip = membrane.max(axis=0)
+rgb = np.clip(np.dstack([mip] * 3) / np.percentile(mip, 99.8) * [0.2, 1, 0.2], 0, 1)
+rgb[find_boundaries(np.where(np.isin(soma, labelled), soma, 0).max(axis=0))] = [1, 0, 1]
+rgb[find_boundaries(np.where(np.isin(soma, orphan_ids), soma, 0).max(axis=0))] = [0, 0.8, 1]
+ax_img.imshow(rgb, interpolation="nearest")
+for _, row in table.iterrows():
+    ax_img.annotate(str(row.cell_id), (row.x_um / vox[2], row.y_um / vox[1]), color="w", fontsize=8,
+                    xytext=(6, -6), textcoords="offset points")
+ax_img.set(title=f"membrane MIP; {len(labelled)} somata with nucleus (magenta), "
+                 f"{len(orphan_ids)} without (cyan)", xticks=[], yticks=[])
+ax_hist.hist(inside, bins=np.linspace(0, 1, 33), color="0.6")
+ax_hist.axvline(p["min_nucleus_inside"], color="r")
+ax_hist.set(yscale="log", xlabel="fraction of nucleus core inside membrane outline", ylabel="nuclei",
+            title=f"{len(ids)} nuclei near membrane signal")
+fig.suptitle(snakemake.wildcards.sample)
+fig.tight_layout()
+fig.savefig(snakemake.output.qc, dpi=90)

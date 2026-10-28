@@ -11,6 +11,8 @@ dependencies = [
     "bioio>=3.5.1",
     "bioio-czi>=2.9.1",
     "zarr>=3.1.6",
+    "spotiflow>=0.6.5",
+    "cellpose>=4.2.1.1",
 ]
 
 [tool.uv]

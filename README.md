@@ -31,6 +31,6 @@ The 546 and 647 nm channels are the mRNA probes, as described in the second tabl
 The fourth channel is DAPI staining.
 
 ## Analysis approach
-1. Determine which voxels map to the neuron of interest
-2. Localize the mRNAs
-3. Colocalize the mRNAs with the neuron voxels to determine how many mRNAs are in each cell type.
+1. Determine which voxels map to the neuron of interest (somata only so far; neurites are not yet included). The membrane channel is thresholded (globally, and relative to the brightest membrane nearby, to cut out-of-focus glow), filled, and stripped of neurites by a morphological opening. [Cellpose](https://github.com/MouseLand/cellpose) segments nuclei in DAPI, and a nucleus whose core lies inside the filled membrane belongs to a labelled neuron; each soma is the filled membrane nearest its nucleus. Soma-sized filled objects without a nucleus are kept but flagged (`has_nucleus = False` in `cells.csv`): in `C1_brain1a` they are bulb neuropil, not somata, so they are left out of the plots. Per-sample QC figures are written to `results/figures/segmentation/`.
+2. Localize the mRNAs. [Spotiflow](https://github.com/weigertlab/spotiflow)'s pretrained 3D smFISH model proposes puncta, and candidates whose peak is less than `min_amplitude` counts above the local background are dropped (`config/config.yaml`). Spotiflow was chosen over a Laplacian-of-Gaussian detector (Big-FISH) because it ignores the defocus rings around bright puncta, which Big-FISH picks up. RS-FISH was not benchmarked. Per-sample QC plots are written to `results/figures/spots/`.
+3. Colocalize the mRNAs with the neuron voxels to determine how many mRNAs are in each cell type. Each spot in a soma is tagged nuclear or cytoplasmic, or unknown in a soma without a detected nucleus.

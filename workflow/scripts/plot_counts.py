@@ -1,7 +1,9 @@
 """Per-cell receptor expression, one panel per receptor.
 
 Driver line is encoded by x position, so color carries no extra information —
-a single hue, no legend. Each point is one cell; the bar is the median.
+a single hue, no legend. Each point is one cell; the bar is the median. Only
+somata with a detected nucleus are plotted: nucleus-free objects can be
+neuropil.
 """
 import matplotlib
 
@@ -20,6 +22,7 @@ TEXT_SECONDARY = "#52514e"
 SURFACE = "#fcfcfb"
 
 df = pd.read_csv(snakemake.input[0])
+df = df[df["has_nucleus"]]
 receptors = sorted(df["receptor"].unique())
 lines = sorted(df["line_label"].unique())
 log.info("%d receptors x %d driver lines", len(receptors), len(lines))
@@ -35,7 +38,7 @@ for ax, receptor in zip(axes, receptors):
     sub = df[df["receptor"] == receptor]
     ax.set_facecolor(SURFACE)
     for x, line_label in enumerate(lines):
-        vals = sub.loc[sub["line_label"] == line_label, "spots_per_1k_vox"].to_numpy()
+        vals = sub.loc[sub["line_label"] == line_label, "spots_per_100um3"].to_numpy()
         if not len(vals):
             continue
         # Jitter so overlapping cells stay countable.
@@ -59,7 +62,7 @@ for ax, receptor in zip(axes, receptors):
     ax.grid(axis="y", color="#eceae5", linewidth=0.8)
     ax.set_axisbelow(True)
 
-axes[0].set_ylabel("spots per 1000 voxels", fontsize=9, color=TEXT_SECONDARY)
+axes[0].set_ylabel("spots per 100 µm³ of soma", fontsize=9, color=TEXT_SECONDARY)
 fig.supxlabel("driver line", fontsize=9, color=TEXT_SECONDARY)
 fig.tight_layout()
 fig.savefig(snakemake.output[0], bbox_inches="tight", facecolor=SURFACE)

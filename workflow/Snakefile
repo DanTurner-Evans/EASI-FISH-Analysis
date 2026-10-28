@@ -78,15 +78,20 @@ rule ingest:
 
 
 rule segment:
-    """Label ring-neuron cell bodies from the reporter channel."""
+    """Label driver-line somata: fill the membrane signal, strip neurites, and
+    split it into somata seeded by the Cellpose nuclei it encloses. Labels are
+    on a downsampled grid."""
     input:
         "data/processed/{sample}/image.zarr",
     output:
-        "data/processed/{sample}/labels.tif",
+        soma="data/processed/{sample}/soma_labels.tif",
+        nuclei="data/processed/{sample}/nuclei_labels.tif",
+        table="data/processed/{sample}/cells.csv",
+        qc="results/figures/segmentation/{sample}_qc.png",
     params:
-        channel_index=config["segmentation_channel"],
+        segmentation=config["segmentation"],
     resources:
-        mem_mb=32000,
+        mem_mb=24000,
     log:
         "logs/segment/{sample}.log",
     script:
@@ -94,32 +99,66 @@ rule segment:
 
 
 rule detect_spots:
-    """Detect mRNA puncta in one channel. Runs once per sample per channel."""
+    """Propose mRNA puncta in one channel with Spotiflow. Runs once per sample
+    per channel; the slow step, so it is kept apart from the threshold."""
     input:
         "data/processed/{sample}/image.zarr",
     output:
-        "data/processed/{sample}/spots_{channel}.csv",
+        "data/processed/{sample}/spot_candidates_{channel}.csv",
     params:
-        detection=lambda wc: config["spot_detection"][wc.channel],
+        detection={k: v for k, v in config["spot_detection"].items() if k != "min_amplitude"},
+        emission_nm=lambda wc: config["channels"][wc.channel]["emission_nm"],
+    threads: 8
     resources:
-        mem_mb=32000,
+        # Set by slab size, not stack depth (see detect_spots.py).
+        mem_mb=24000,
     log:
         "logs/detect_spots/{sample}_{channel}.log",
     script:
         "scripts/detect_spots.py"
 
 
-rule count_per_cell:
-    """Assign puncta to labelled cells and emit a tidy per-cell table."""
+rule filter_spots:
+    """Apply the amplitude threshold to the candidates and draw a QC figure."""
     input:
-        labels=  "data/processed/{sample}/labels.tif",
+        candidates="data/processed/{sample}/spot_candidates_{channel}.csv",
+        image="data/processed/{sample}/image.zarr",
+    output:
+        spots="data/processed/{sample}/spots_{channel}.csv",
+        qc="results/figures/spots/{sample}_{channel}_qc.png",
+    params:
+        min_amplitude=lambda wc: config["spot_detection"]["min_amplitude"][wc.channel],
+        emission_nm=lambda wc: config["channels"][wc.channel]["emission_nm"],
+    log:
+        "logs/filter_spots/{sample}_{channel}.log",
+    script:
+        "scripts/filter_spots.py"
+
+
+rule spots:
+    """Target: filtered puncta and QC figures for every sample and channel,
+    without needing segmentation."""
+    input:
+        expand("results/figures/spots/{sample}_{channel}_qc.png",
+               sample=SAMPLES, channel=config["channels"]),
+
+
+rule count_per_cell:
+    """Assign puncta to somata, tagged nuclear, cytoplasmic or (somata without a
+    detected nucleus) unknown, and emit a tidy per-cell table."""
+    input:
+        soma=    "data/processed/{sample}/soma_labels.tif",
+        nuclei=  "data/processed/{sample}/nuclei_labels.tif",
+        table=   "data/processed/{sample}/cells.csv",
         spots=   expand("data/processed/{{sample}}/spots_{channel}.csv",
                         channel=config["channels"]),
     output:
-        "data/processed/{sample}/counts.csv",
+        counts="data/processed/{sample}/counts.csv",
+        spots="data/processed/{sample}/spots_assigned.csv",
     params:
         meta=lambda wc: meta(wc.sample),
-        channels=config["channels"],
+        channels=list(config["channels"]),
+        downsample=config["segmentation"]["downsample"],
     log:
         "logs/count_per_cell/{sample}.log",
     script:

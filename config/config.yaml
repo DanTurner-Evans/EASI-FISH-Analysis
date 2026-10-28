@@ -1,5 +1,9 @@
-# Channel wavelengths present in every CZI.
-channels: ["546", "647"]
+# mRNA probe channels, keyed by the label used in filenames and receptor_sets.
+# The CZI channel names (Cam1-T1, ...) carry no wavelength, so each probe is
+# matched to a channel by the emission wavelength recorded in the CZI metadata.
+channels:
+  "546": {emission_nm: 571}
+  "647": {emission_nm: 648}
 
 # Driver line encoded by the leading letter of the filename (see README).
 lines:
@@ -14,14 +18,47 @@ receptor_sets:
   "2": {"546": "Octb1R-B3",   "647": "Octb2R-B4"}
   "3": {"546": "Octa2R-B2",   "647": "Octb3R-B5"}
 
-# Spot-detection parameters, per channel. TUNE THESE on a known sample before
-# trusting any counts downstream.
+# Spot detection: Spotiflow (pretrained 3D smFISH model) proposes candidates,
+# then a cheap amplitude filter removes noise. Only the filter re-runs when
+# min_amplitude changes. Developed on D3_brain2a:
+#   - Spotiflow ignores the defocus rings/cones around bright puncta, which a
+#     LoG detector (Big-FISH, skimage blob_log) picks up, esp. in 647.
+#   - On tissue-free background Spotiflow fires on noise with amplitude ~30-60;
+#     real puncta peak at ~400-600. min_amplitude sits in the gap. Check the
+#     per-sample histograms in results/figures/spots/ before trusting counts.
 spot_detection:
-  "546": {min_sigma: 1.0, max_sigma: 3.0, threshold: 0.02}
-  "647": {min_sigma: 1.0, max_sigma: 3.0, threshold: 0.02}
+  model: smfish_3d
+  prob_thresh: null              # null = the model's own calibrated threshold
+  background_window_um: [2.5, 4.0, 4.0]   # z, y, x extent of the local background estimate
+  slab_planes: 48                # planes per slab: ~21 GB peak (12.5 GB + 0.125 GB/plane incl. overlap)
+  slab_overlap_um: 4.0           # context added above and below each slab
+  min_amplitude:                 # camera counts above local background
+    "546": 100
+    "647": 100
 
-# Index of the channel used to segment cell bodies (the driver-line reporter).
+# Index of the driver-line membrane channel in the CZI (used by the MIP rule).
 segmentation_channel: 0
+
+# Soma segmentation (segment.py): the membrane channel is thresholded, filled
+# and stripped of neurites; Cellpose nuclei whose core lies inside that outline
+# seed the somata. Developed on D3_brain2a and C1_brain1a.
+segmentation:
+  membrane_emission_nm: 498
+  nuclei_emission_nm: 415
+  downsample: [1, 4, 4]          # z, y, x; ~0.46-0.5 um near-isotropic voxels
+  membrane_threshold_mads: 10    # membrane foreground: median + k * MAD of the smoothed channel ...
+  local_contrast: 0.15           # ... and >= this fraction of the brightest membrane nearby (cuts glow)
+  local_window_um: 2.0           # radius of "nearby"
+  close_um: 1.0                  # gaps in the membrane shell bridged before filling
+  neurite_um: 1.5                # structures thinner than this radius are removed
+  nucleus_volume_um3: [80, 600]  # Cellpose objects outside this are fragments, glia or merged nuclei
+  nucleus_core_um: 1.0           # a nucleus's core lies deeper than this inside it
+  min_nucleus_inside: 0.85       # labelled if this fraction of its core is in the outline ...
+  neuropil_check_um: 10.0        # ... unless, within this distance of it (shared with neighbours),
+  max_crowding: 0.47             # more than this fraction is outline: neuropil. Provisional: set on
+                                 # B3_brain1a, neuropil 0.50-0.66 vs somata <= 0.44
+  max_soma_radius_um: 3.5        # soma extends at most this far beyond its nucleus
+  soma_volume_um3: [100, 2000]   # size range for nucleus-free cells (also the min component searched)
 
 # Display settings for the membrane-channel maximum intensity projections.
 mip:

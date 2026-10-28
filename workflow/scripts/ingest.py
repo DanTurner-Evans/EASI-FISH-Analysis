@@ -3,7 +3,8 @@
 Reading a CZI is slow and single-threaded; every downstream rule reads the zarr
 instead so that cost is paid exactly once per sample.
 """
-import numpy as np
+import xml.etree.ElementTree as ET
+
 import zarr
 from bioio import BioImage
 
@@ -13,6 +14,19 @@ log = setup_logging(snakemake)  # noqa: F821  (injected by Snakemake)
 
 img = BioImage(snakemake.input[0])
 log.info("dims=%s  channels=%s", img.dims, img.channel_names)
+
+# Channel names (Cam1-T1, ...) say nothing about the fluorophore; the emission
+# wavelength in the Zeiss metadata does. The first <Channel> element carrying it
+# wins, as the same channel Id recurs elsewhere in the XML.
+md = img.metadata
+root = md if isinstance(md, ET.Element) else ET.fromstring(md)
+emission = {}
+for ch in root.iter("Channel"):
+    em = ch.find("EmissionWavelength")
+    if em is not None and em.text and ch.get("Name") not in emission:
+        emission[ch.get("Name")] = float(em.text)
+emission_nm = [emission[str(name)] for name in img.channel_names]
+log.info("emission wavelengths (nm): %s", emission_nm)
 
 # bioio returns TCZYX; this data is a single timepoint z-stack.
 data = img.get_image_data("CZYX", T=0)
@@ -28,7 +42,8 @@ store = zarr.open(
     chunks=(1, 1, *data.shape[-2:]),
 )
 store[:] = data
-store.attrs["channel_names"] = list(img.channel_names)
+store.attrs["channel_names"] = [str(n) for n in img.channel_names]
+store.attrs["emission_nm"] = emission_nm
 store.attrs["physical_pixel_sizes"] = [
     getattr(img.physical_pixel_sizes, ax) for ax in ("Z", "Y", "X")
 ]
