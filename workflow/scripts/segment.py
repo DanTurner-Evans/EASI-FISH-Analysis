@@ -14,10 +14,14 @@
    goes to the nearest one. (A watershed on membrane intensity lets a soma
    flood along the bright shell of the soma stacked below it.)
 4. Outline components with no labelled nucleus at all are kept as
-   nucleus-free cells (has_nucleus = False) if soma-sized.
-   Neuropil also ends up here (e.g. bulb glomeruli in C1_brain1a, which lie
-   among visible nuclei yet contain none), so check the QC figure before
-   using them.
+   nucleus-free cells (has_nucleus = False), for inspection only: they are not
+   counted, because on review most were dendrites, axons, trachea or fat
+   globules. They must be soma-sized and soma-shaped:
+   a thick body (some voxel at least orphan_min_core_um from its surface) that
+   is evenly filled with membrane signal (coefficient of variation at most
+   orphan_max_cv). Neuropil that survives the opening (D1 dendrites, D3
+   arbours) is patchy, and fibre bundles are thin. Rejected components are
+   drawn grey in the QC figure.
 
 Everything runs on a grid downsampled by `downsample` (near-isotropic ~0.5 um
 voxels); the label images are written on that grid. A cell with a nucleus
@@ -135,13 +139,28 @@ for k, box in enumerate(ndi.find_objects(soma), 1):
 # Only whole components of soma size: cutting larger ones up turns neuropil
 # (ellipsoid body, bulb) into soma-sized pieces.
 has_labelled = np.unique(components[is_labelled & outline])
-orphans = [c for c in range(1, n_components + 1)
-           if c not in has_labelled and min_soma <= component_volume[c - 1] <= max_soma]
+candidates = [c for c in range(1, n_components + 1)
+              if c not in has_labelled and min_soma <= component_volume[c - 1] <= max_soma]
+orphans, rejected = [], np.zeros(soma.shape, bool)
+component_boxes = ndi.find_objects(components)
+for c in candidates:
+    box = component_boxes[c - 1]
+    own = components[box] == c
+    core = ndi.distance_transform_edt(np.pad(own, 1), sampling=vox).max()
+    values = smooth[box][own]
+    cv = values.std() / values.mean()
+    keep = core >= p["orphan_min_core_um"] and cv <= p["orphan_max_cv"]
+    log.info("nucleus-free component %d: %.0f um3, core %.2f um, cv %.2f -> %s",
+             c, component_volume[c - 1], core, cv, "kept" if keep else "rejected")
+    if keep:
+        orphans.append(c)
+    else:
+        rejected[box] |= own
 orphan_ids = list(range(int(nuclei.max()) + 1, int(nuclei.max()) + 1 + len(orphans)))
 for c, k in zip(orphans, orphan_ids):
     soma[components == c] = k
-log.info("%d nucleus-free cells (components of %s-%s um3 without a labelled nucleus)",
-         len(orphan_ids), min_soma, max_soma)
+log.info("%d nucleus-free cells, %d soma-sized components rejected as neuropil or fibre",
+         len(orphan_ids), len(candidates) - len(orphans))
 
 # --- table and label images ------------------------------------------------------
 cell_ids = np.concatenate([labelled, orphan_ids]).astype(int)
@@ -171,6 +190,7 @@ log.info("soma volumes (um3): %s", table.soma_volume_um3.round().tolist())
 fig, (ax_img, ax_hist) = plt.subplots(1, 2, figsize=(15, 7), gridspec_kw={"width_ratios": [1.6, 1]})
 mip = membrane.max(axis=0)
 rgb = np.clip(np.dstack([mip] * 3) / np.percentile(mip, 99.8) * [0.2, 1, 0.2], 0, 1)
+rgb[find_boundaries(rejected.max(axis=0))] = 0.55
 rgb[find_boundaries(np.where(np.isin(soma, labelled), soma, 0).max(axis=0))] = [1, 0, 1]
 rgb[find_boundaries(np.where(np.isin(soma, orphan_ids), soma, 0).max(axis=0))] = [0, 0.8, 1]
 ax_img.imshow(rgb, interpolation="nearest")
@@ -178,7 +198,8 @@ for _, row in table.iterrows():
     ax_img.annotate(str(row.cell_id), (row.x_um / vox[2], row.y_um / vox[1]), color="w", fontsize=8,
                     xytext=(6, -6), textcoords="offset points")
 ax_img.set(title=f"membrane MIP; {len(labelled)} somata with nucleus (magenta), "
-                 f"{len(orphan_ids)} without (cyan)", xticks=[], yticks=[])
+                 f"{len(orphan_ids)} without (cyan), {len(candidates) - len(orphans)} rejected (grey)",
+           xticks=[], yticks=[])
 ax_hist.hist(inside, bins=np.linspace(0, 1, 33), color="0.6")
 ax_hist.axvline(p["min_nucleus_inside"], color="r")
 ax_hist.set(yscale="log", xlabel="fraction of nucleus core inside membrane outline", ylabel="nuclei",

@@ -34,7 +34,7 @@ spot_detection:
   slab_overlap_um: 4.0           # context added above and below each slab
   min_amplitude:                 # camera counts above local background
     "546": 100
-    "647": 100
+    "647": 140                   # 647's noise peak is taller, with a tail past 100
 
 # Index of the driver-line membrane channel in the CZI (used by the MIP rule).
 segmentation_channel: 0
@@ -59,6 +59,33 @@ segmentation:
                                  # B3_brain1a, neuropil 0.50-0.66 vs somata <= 0.44
   max_soma_radius_um: 3.5        # soma extends at most this far beyond its nucleus
   soma_volume_um3: [100, 2000]   # size range for nucleus-free cells (also the min component searched)
+  # Nucleus-free cells are kept for inspection but NOT counted (4 of 14 were somata on review).
+  orphan_min_core_um: 2.0        # nucleus-free cells must be this thick (radius) and evenly filled:
+  orphan_max_cv: 0.5             # membrane CV at most this. Set on all 6 segmented samples: somata
+                                 # core >= 2.08 um, CV <= 0.39; D1/D3 neuropil CV 0.61-0.99, fibres
+                                 # core <= 1.94 um
+
+# Neurite spot density (neurites.py). The mask reuses the segmentation's
+# membrane_threshold_mads, local_contrast and local_window_um, at full resolution.
+# One compartment per sample: neurites are not assigned to cells or split by region.
+neurites:
+  smooth_um: [0.25, 0.17, 0.17]  # z, y, x Gaussian sigma (0.5 plane, 1.5 px)
+  soma_margin_um: 0.5            # somata are grown by this before they are removed
+  min_fragment_um3: 0.5          # smaller membrane fragments are noise
+  shell_um: [1.0, 3.0]           # control: tissue this far from the mask sets the chance density
+  slab_planes: 48
+
+# Inspection stacks for Fiji (inspect_cells.py): extent of the full-resolution
+# crop around each nucleus-free cell.
+inspect:
+  crop_um: [16.0, 30.0, 30.0]    # z, y, x
+
+# Example figure (example_plane.py): one region, projected over about one spot depth.
+example_plane:
+  sample: D3_brain2a
+  planes: [34, 40]               # first and last z plane, inclusive
+  origin_px: [390, 1089]         # y, x of the top-left corner, full-resolution pixels
+  size_px: 512
 
 # Display settings for the membrane-channel maximum intensity projections.
 mip:

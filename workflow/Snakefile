@@ -60,6 +60,7 @@ wildcard_constraints:
 rule all:
     input:
         "results/tables/spot_counts.csv",
+        "results/tables/neurite_counts.csv",
         "results/figures/counts_by_receptor.pdf",
 
 
@@ -143,6 +144,58 @@ rule spots:
                sample=SAMPLES, channel=config["channels"]),
 
 
+rule inspect:
+    """Fiji hyperstacks of one sample for checking the segmentation and spot
+    filter: the whole field on the segmentation grid, plus full-resolution
+    crops and PNGs of each nucleus-free cell. Needs spot candidates, so it
+    runs spot detection if that has not been done."""
+    input:
+        image=     "data/processed/{sample}/image.zarr",
+        soma=      "data/processed/{sample}/soma_labels.tif",
+        nuclei=    "data/processed/{sample}/nuclei_labels.tif",
+        table=     "data/processed/{sample}/cells.csv",
+        candidates=expand("data/processed/{{sample}}/spot_candidates_{channel}.csv",
+                          channel=config["channels"]),
+    output:
+        directory("data/processed/{sample}/inspect"),
+    params:
+        segmentation=config["segmentation"],
+        channels=list(config["channels"]),
+        emission_nm={c: v["emission_nm"] for c, v in config["channels"].items()},
+        min_amplitude=config["spot_detection"]["min_amplitude"],
+        crop_um=config["inspect"]["crop_um"],
+    resources:
+        # Raw channels are read one at a time (~2.7 GB each); the overview
+        # stack of the deepest sample is ~1.6 GB.
+        mem_mb=12000,
+    log:
+        "logs/inspect/{sample}.log",
+    script:
+        "scripts/inspect_cells.py"
+
+
+rule example_plane:
+    """Example figure: raw channels and detected/rejected spots in one region,
+    set under example_plane in config.yaml."""
+    input:
+        image="data/processed/{sample}/image.zarr",
+        candidates=expand("data/processed/{{sample}}/spot_candidates_{channel}.csv",
+                          channel=config["channels"]),
+    output:
+        "results/figures/{sample}_example_plane.png",
+    params:
+        example=config["example_plane"],
+        channels=list(config["channels"]),
+        emission_nm={c: v["emission_nm"] for c, v in config["channels"].items()},
+        min_amplitude=config["spot_detection"]["min_amplitude"],
+        membrane_emission_nm=config["segmentation"]["membrane_emission_nm"],
+        nuclei_emission_nm=config["segmentation"]["nuclei_emission_nm"],
+    log:
+        "logs/example_plane/{sample}.log",
+    script:
+        "scripts/example_plane.py"
+
+
 rule count_per_cell:
     """Assign puncta to somata, tagged nuclear, cytoplasmic or (somata without a
     detected nucleus) unknown, and emit a tidy per-cell table."""
@@ -163,6 +216,42 @@ rule count_per_cell:
         "logs/count_per_cell/{sample}.log",
     script:
         "scripts/count_per_cell.py"
+
+
+rule neurites:
+    """Spot density in the driver line's neurites (full-resolution membrane
+    mask minus somata), against a shell of surrounding tissue as chance level."""
+    input:
+        image="data/processed/{sample}/image.zarr",
+        soma= "data/processed/{sample}/soma_labels.tif",
+        spots=expand("data/processed/{{sample}}/spots_{channel}.csv",
+                     channel=config["channels"]),
+    output:
+        table="data/processed/{sample}/neurite_counts.csv",
+        mask= "data/processed/{sample}/neurite_mask.tif",
+        qc=   "results/figures/neurites/{sample}_qc.png",
+    params:
+        segmentation=config["segmentation"],
+        neurites=config["neurites"],
+        meta=lambda wc: meta(wc.sample),
+        channels=list(config["channels"]),
+    resources:
+        # Full-resolution masks and fragment labels of the deepest stack (365 planes).
+        mem_mb=16000,
+    log:
+        "logs/neurites/{sample}.log",
+    script:
+        "scripts/neurites.py"
+
+
+rule aggregate_neurites:
+    input:
+        expand("data/processed/{sample}/neurite_counts.csv", sample=SAMPLES),
+    output:
+        "results/tables/neurite_counts.csv",
+    run:
+        import pandas as pd
+        pd.concat([pd.read_csv(f) for f in input], ignore_index=True).to_csv(output[0], index=False)
 
 
 rule aggregate:

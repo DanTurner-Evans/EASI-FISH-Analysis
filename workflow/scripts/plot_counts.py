@@ -1,9 +1,8 @@
 """Per-cell receptor expression, one panel per receptor.
 
 Driver line is encoded by x position, so color carries no extra information —
-a single hue, no legend. Each point is one cell; the bar is the median. Only
-somata with a detected nucleus are plotted: nucleus-free objects can be
-neuropil.
+a single hue, no legend. Each point is one cell; the bar is the median.
+The table holds only somata with a detected nucleus (see aggregate.py).
 """
 import matplotlib
 
@@ -22,7 +21,6 @@ TEXT_SECONDARY = "#52514e"
 SURFACE = "#fcfcfb"
 
 df = pd.read_csv(snakemake.input[0])
-df = df[df["has_nucleus"]]
 receptors = sorted(df["receptor"].unique())
 lines = sorted(df["line_label"].unique())
 log.info("%d receptors x %d driver lines", len(receptors), len(lines))
