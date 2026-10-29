@@ -271,6 +271,7 @@ rule aggregate:
         "results/tables/spot_counts.csv",
     params:
         exclude_cells=config.get("exclude_cells") or {},
+        exclude_soma_lines=list(config.get("exclude_soma_lines") or {}),
     log:
         "logs/aggregate.log",
     script:

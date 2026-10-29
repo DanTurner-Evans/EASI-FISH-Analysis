@@ -75,6 +75,12 @@ segmentation:
                                  # core >= 2.08 um, CV <= 0.39; D1/D3 neuropil CV 0.61-0.99, fibres
                                  # core <= 1.94 um
 
+# Driver lines left out of the soma counts (results/tables/spot_counts.csv) by
+# aggregate.py. Their neurite measurements are kept, as those do not use DAPI.
+exclude_soma_lines:
+  A: "DAPI stain failed: no nuclei in the labelled somata of A2_brain1t, A2_brain2 or A3_brain1.
+      ER3p_a/b is covered by line B (SS04766)."
+
 # Somata with a nucleus that visual review showed are not neurons, dropped from
 # results/tables/spot_counts.csv by aggregate.py. IDs are cell_id in the
 # sample's cells.csv: re-check them (in the QC figure) whenever a sample is
