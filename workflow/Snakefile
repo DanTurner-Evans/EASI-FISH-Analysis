@@ -252,10 +252,13 @@ rule count_per_cell:
 
 rule neurites:
     """Spot density in the driver line's neurites (full-resolution membrane
-    mask minus somata), against a shell of surrounding tissue as chance level."""
+    mask minus counted somata), against a shell of surrounding tissue as
+    chance level."""
     input:
         image="data/processed/{sample}/image.zarr",
         soma= "data/processed/{sample}/soma_labels.tif",
+        nuclei="data/processed/{sample}/nuclei_labels.tif",
+        table="data/processed/{sample}/cells.csv",
         spots=expand("data/processed/{{sample}}/spots_{channel}.csv",
                      channel=config["channels"]),
     output:
@@ -265,6 +268,7 @@ rule neurites:
     params:
         segmentation=config["segmentation"],
         neurites=config["neurites"],
+        exclude_cells=lambda wc: (config.get("exclude_cells") or {}).get(wc.sample, []),
         meta=lambda wc: meta(wc.sample),
         channels=list(config["channels"]),
     resources:

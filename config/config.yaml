@@ -95,6 +95,8 @@ exclude_cells:
 neurites:
   smooth_um: [0.25, 0.17, 0.17]  # z, y, x Gaussian sigma (0.5 plane, 1.5 px)
   soma_margin_um: 0.5            # somata are grown by this before they are removed
+  nucleus_margin_um: 2.0         # membrane this close to any nucleus is soma layer, not neurite
+                                 # (drops dim somata the segmentation misses, e.g. C1 z 25-38 um)
   min_fragment_um3: 0.5          # smaller membrane fragments are noise
   shell_um: [1.0, 3.0]           # control: tissue this far from the mask sets the chance density
   slab_planes: 48

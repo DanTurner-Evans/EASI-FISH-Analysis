@@ -2,13 +2,20 @@
 
 1. Neurite mask, at full resolution (processes are 0.2-1 um, below the
    segmentation grid): the membrane outline test from segment.py (global
-   threshold and local contrast, same parameters), minus the somata (plus a
-   margin) and minus fragments smaller than min_fragment_um3. The volume is
-   processed in z slabs so deep stacks fit in memory.
+   threshold and local contrast, same parameters), minus the counted somata
+   (plus a margin) and minus fragments smaller than min_fragment_um3. Counted
+   somata are those with a nucleus not listed in exclude_cells; nucleus-free
+   cells stay in the mask, as on review most were dendrites. Membrane within
+   nucleus_margin_um of any Cellpose nucleus is removed too: neuropil has no
+   cell bodies, so this drops labelled somata the segmentation missed (dim
+   ones in the soma layer), at the cost of the first micron or two of each
+   primary neurite. The volume is processed in z slabs so deep stacks fit in
+   memory.
 2. Chance level: in neuropil, labelled processes are packed among unlabelled
    ones, so a spot on a neurite voxel could belong to a neighbour. The control
-   is the density in a shell of tissue shell_um around the mask (no somata, no
-   other membrane signal), computed on the segmentation grid. Enrichment is
+   is the density in a shell of tissue shell_um around the mask (no somata,
+   nothing near a nucleus, no other membrane signal), computed on the
+   segmentation grid, so neurites are compared with neuropil. Enrichment is
    neurite density / shell density; ~1 means neurites hold no more spots than
    the tissue they run through.
 
@@ -64,11 +71,19 @@ median = np.median(sample)
 mad = 1.4826 * np.median(np.abs(sample - median))
 del sample
 
-soma = tifffile.imread(snakemake.input.soma) > 0
+cells = pd.read_csv(snakemake.input.table)
+counted = cells.cell_id[cells.has_nucleus & ~cells.cell_id.isin(p.exclude_cells)]
+soma = np.isin(tifffile.imread(snakemake.input.soma), counted)
+log.info("removing %d counted somata of %d cells", len(counted), len(cells))
 r = np.floor(np_["soma_margin_um"] / vox_grid).astype(int)
 zz, yy, xx = np.ogrid[-r[0]:r[0] + 1, -r[1]:r[1] + 1, -r[2]:r[2] + 1]
 ball = (zz * vox_grid[0]) ** 2 + (yy * vox_grid[1]) ** 2 + (xx * vox_grid[2]) ** 2 <= np_["soma_margin_um"] ** 2
 soma_zone = ndi.binary_dilation(soma, ball)
+nuclei = tifffile.imread(snakemake.input.nuclei) > 0
+near_nucleus = ndi.distance_transform_edt(~nuclei, sampling=vox_grid) <= np_["nucleus_margin_um"]
+soma_zone |= near_nucleus
+log.info("%.1f%% of the grid is within %s um of a nucleus", 100 * near_nucleus.mean(), np_["nucleus_margin_um"])
+del nuclei, near_nucleus
 
 foreground = np.zeros(shape, bool)
 for core, padded, off in slabs():
