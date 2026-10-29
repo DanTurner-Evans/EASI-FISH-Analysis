@@ -19,22 +19,32 @@ receptor_sets:
   "3": {"546": "Octa2R-B2",   "647": "Octb3R-B5"}
 
 # Spot detection: Spotiflow (pretrained 3D smFISH model) proposes candidates,
-# then a cheap amplitude filter removes noise. Only the filter re-runs when
-# min_amplitude changes. Developed on D3_brain2a:
+# then a cheap amplitude filter (spot_filter) removes noise. Only the filter
+# re-runs when its settings change. Developed on D3_brain2a:
 #   - Spotiflow ignores the defocus rings/cones around bright puncta, which a
 #     LoG detector (Big-FISH, skimage blob_log) picks up, esp. in 647.
 #   - On tissue-free background Spotiflow fires on noise with amplitude ~30-60;
-#     real puncta peak at ~400-600. min_amplitude sits in the gap. Check the
-#     per-sample histograms in results/figures/spots/ before trusting counts.
+#     real puncta peak higher. Check the per-sample histograms in
+#     results/figures/spots/ before trusting counts.
 spot_detection:
   model: smfish_3d
   prob_thresh: null              # null = the model's own calibrated threshold
   background_window_um: [2.5, 4.0, 4.0]   # z, y, x extent of the local background estimate
   slab_planes: 48                # planes per slab: ~21 GB peak (12.5 GB + 0.125 GB/plane incl. overlap)
   slab_overlap_um: 4.0           # context added above and below each slab
-  min_amplitude:                 # camera counts above local background
-    "546": 100
-    "647": 140                   # 647's noise peak is taller, with a tail past 100
+
+# Amplitude filter (amplitude = camera counts above local background). Imaging
+# conditions differ between brains, so each sample and channel gets its own
+# min_amplitude: the lowest point of the smoothed log-amplitude histogram
+# between the noise peak (the first peak) and the puncta peak (the tallest
+# after it). On B3/C1/D3 this gave 51-98 for 546 and 43-163 for 647; in a
+# gallery of C1 647 candidates, those below its valley (43) were mostly noise
+# and those above mostly compact puncta.
+spot_filter:
+  smoothing: 0.08                # KDE bandwidth on log10 amplitude (scipy bw_method)
+  min_prominence: 0.02           # peaks less prominent than this fraction of the tallest are wiggles
+  fallback: 100                  # used, with a warning in the log and QC title, if there is no valley
+  overrides: {}                  # {sample: {channel: amplitude}} where the valley is wrong
 
 # Index of the driver-line membrane channel in the CZI (used by the MIP rule).
 segmentation_channel: 0
@@ -65,6 +75,14 @@ segmentation:
                                  # core >= 2.08 um, CV <= 0.39; D1/D3 neuropil CV 0.61-0.99, fibres
                                  # core <= 1.94 um
 
+# Somata with a nucleus that visual review showed are not neurons, dropped from
+# results/tables/spot_counts.csv by aggregate.py. IDs are cell_id in the
+# sample's cells.csv: re-check them (in the QC figure) whenever a sample is
+# segmented again, as a rerun can renumber cells.
+exclude_cells:
+  B3_brain1a: [316]              # trachea
+  C3_brain2b: [521, 558]         # dendrites or fat globules
+
 # Neurite spot density (neurites.py). The mask reuses the segmentation's
 # membrane_threshold_mads, local_contrast and local_window_um, at full resolution.
 # One compartment per sample: neurites are not assigned to cells or split by region.
@@ -92,8 +110,8 @@ mip:
   percentiles: [0.5, 99.8]  # intensity percentiles mapped to black and full green
   scale_bar_um: 50
 
-# Scans excluded from the analysis: QC/test acquisitions that predate the
-# naming convention. Listing them here is deliberate — any other unrecognised
+# Scans excluded from the analysis: QC/test acquisitions (most predate the
+# naming convention). Listing them here is deliberate — any other unrecognised
 # filename aborts the run rather than being silently skipped.
 # NOTE: this leaves the A1 condition (SS67611 x Oamb-B1/Oct-TyR_B3) with no data.
 exclude:
@@ -102,3 +120,4 @@ exclude:
   - A1_checkbrain2_otherneurons
   - A1_GFP
   - A1_test
+  - A2_brain1t                   # "t" = test scan; its labelled somata also have no DAPI

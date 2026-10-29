@@ -11,7 +11,7 @@ Written to data/processed/<sample>/inspect/:
 
 Both stacks hold, in order: membrane, DAPI, each probe, soma labels, nuclei
 labels, soma outlines, then kept and rejected spot candidates for each probe
-(rejected = below min_amplitude). Nucleus-free cells get crops because, with
+(rejected = below the sample's amplitude threshold). Nucleus-free cells get crops because, with
 no nucleus to confirm them, they are the ones the shape filter decides.
 """
 import os
@@ -28,7 +28,7 @@ from scipy import ndimage as ndi
 from skimage.measure import block_reduce
 from skimage.segmentation import find_boundaries
 
-from common import channel_index, setup_logging
+from common import channel_index, min_amplitude, setup_logging
 
 log = setup_logging(snakemake)  # noqa: F821
 
@@ -49,6 +49,8 @@ soma = tifffile.imread(snakemake.input.soma)
 nuclei = tifffile.imread(snakemake.input.nuclei)
 cells = pd.read_csv(snakemake.input.table)
 candidates = {channel: pd.read_csv(path) for channel, path in zip(p.channels, snakemake.input.candidates)}
+threshold = {channel: min_amplitude(c.amplitude.to_numpy(), p.spot_filter, p.overrides.get(channel))[0]
+             for channel, c in candidates.items()}
 names = list(raw) + ["soma_labels", "nuclei_labels", "soma_outline"] + \
         [f"{channel}_{kind}" for channel in p.channels for kind in ("kept", "rejected")]
 
@@ -61,7 +63,7 @@ def spot_marks(shape, lo, scale):
     footprint[0] = np.hypot(*np.mgrid[-2:3, -2:3]) <= 2
     for channel in p.channels:
         c = candidates[channel]
-        kept = c.amplitude >= p.min_amplitude[channel]
+        kept = c.amplitude >= threshold[channel]
         for mask in (kept, ~kept):
             idx = np.floor((c.loc[mask, ["z", "y", "x"]].to_numpy() - lo) / scale).astype(int)
             idx = idx[np.all((idx >= 0) & (idx < shape), axis=1)]

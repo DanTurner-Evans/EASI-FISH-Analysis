@@ -1,4 +1,8 @@
-"""Keep candidate puncta above the amplitude threshold and draw a QC figure.
+"""Keep candidate puncta above the sample's amplitude threshold and draw a QC figure.
+
+The threshold is the valley between the noise and puncta peaks of this
+sample's amplitude histogram (common.min_amplitude), unless overridden in the
+config.
 
 The figure shows the amplitude histogram with the threshold, and kept (green)
 versus rejected (red) spots on a max projection of the densest region. The
@@ -12,22 +16,26 @@ import numpy as np
 import pandas as pd
 import zarr
 
-from common import channel_index, setup_logging
+from common import channel_index, min_amplitude, setup_logging
 
 log = setup_logging(snakemake)  # noqa: F821
 
 candidates = pd.read_csv(snakemake.input.candidates)
-threshold = snakemake.params.min_amplitude
+threshold, method = min_amplitude(candidates.amplitude.to_numpy(), snakemake.params.spot_filter,
+                                  snakemake.params.override)
+if method == "fallback":
+    log.warning("no valley between noise and puncta peaks; using the fallback threshold %s", threshold)
 keep = candidates.amplitude >= threshold
 candidates[keep].to_csv(snakemake.output.spots, index=False)
-log.info("kept %d/%d candidates with amplitude >= %s", keep.sum(), len(candidates), threshold)
+log.info("kept %d/%d candidates with amplitude >= %.1f (%s)", keep.sum(), len(candidates), threshold, method)
 
 fig, (ax_hist, ax_img) = plt.subplots(1, 2, figsize=(14, 6.5))
 bins = np.logspace(0, 5, 80)
 ax_hist.hist(candidates.amplitude.clip(1, None), bins, color="0.6")
 ax_hist.axvline(threshold, color="r")
 ax_hist.set(xscale="log", xlabel="amplitude (counts above local background)", ylabel="candidates",
-            title=f"{keep.sum()} of {len(candidates)} kept")
+            title=f"{keep.sum()} of {len(candidates)} kept; threshold {threshold:.0f} ({method})"
+                  + (": NO VALLEY, CHECK" if method == "fallback" else ""))
 
 # Densest 400 x 400 px region, so the overlay shows the filter where it matters.
 store = zarr.open(snakemake.input.image, mode="r")

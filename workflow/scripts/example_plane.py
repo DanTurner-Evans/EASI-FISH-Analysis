@@ -2,7 +2,7 @@
 
 Top row: membrane, each probe and DAPI, raw (max projection over a few planes,
 about one spot deep). Bottom row: composite, each probe with its detected
-(yellow) and rejected (red, below min_amplitude) candidates, and the composite
+(yellow) and rejected (red, below the sample's amplitude threshold) candidates, and the composite
 with detected spots. A spot is drawn if its centre lies in the projected planes.
 """
 import matplotlib
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import zarr
 
-from common import channel_index, setup_logging
+from common import channel_index, min_amplitude, setup_logging
 
 log = setup_logging(snakemake)  # noqa: F821
 
@@ -39,12 +39,13 @@ def stretch(img):
 membrane = stretch(project(p.membrane_emission_nm))
 dapi = stretch(project(p.nuclei_emission_nm))
 probes = {channel: stretch(project(p.emission_nm[channel])) for channel in p.channels}
-spots = {}
+spots, threshold = {}, {}
 for channel, path in zip(p.channels, snakemake.input.candidates):
     c = pd.read_csv(path)
+    threshold[channel] = min_amplitude(c.amplitude.to_numpy(), p.spot_filter, p.overrides.get(channel))[0]
     in_box = (c.y >= y0) & (c.y < y0 + size) & (c.x >= x0) & (c.x < x0 + size)
     c = c[in_box & c.z.round().between(z0, z1)]  # spot centred in a projected plane
-    spots[channel] = (c, c.amplitude >= p.min_amplitude[channel])
+    spots[channel] = (c, c.amplitude >= threshold[channel])
 
 # Composite: green membrane, blue DAPI, then magenta and cyan for the probes.
 probe_colours = [(1, 0, 1), (0, 1, 1)]
@@ -72,7 +73,7 @@ for ax, (channel, img) in zip(axes[1, 1:-1], probes.items()):
     c, kept = spots[channel]
     ax.imshow(img, cmap="gray")
     for mask, colour, label in [(kept, "yellow", f"detected ({kept.sum()})"),
-                                (~kept, "red", f"rejected: amplitude < {p.min_amplitude[channel]} "
+                                (~kept, "red", f"rejected: amplitude < {threshold[channel]:.0f} "
                                                f"({(~kept).sum()})")]:
         ax.scatter(c.x[mask] - x0, c.y[mask] - y0, s=90, facecolors="none", edgecolors=colour,
                    linewidths=1.2, label=label)
