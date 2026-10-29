@@ -6,6 +6,7 @@ import logging
 import sys
 
 import numpy as np
+from scipy import ndimage as ndi
 from scipy.signal import find_peaks
 from scipy.stats import gaussian_kde
 
@@ -54,3 +55,26 @@ def min_amplitude(amplitudes, spot_filter, override=None):
     noise, puncta = peaks[0], peaks[1:][np.argmax(density[peaks[1:]])]
     valley = noise + np.argmin(density[noise:puncta + 1])
     return float(10 ** grid[valley]), "valley"
+
+
+def grid_ball(radius_um, vox):
+    """Ellipsoidal footprint of the given physical radius on an anisotropic grid."""
+    r = np.floor(radius_um / vox).astype(int)
+    z, y, x = np.ogrid[-r[0]:r[0] + 1, -r[1]:r[1] + 1, -r[2]:r[2] + 1]
+    return (z * vox[0]) ** 2 + (y * vox[1]) ** 2 + (x * vox[2]) ** 2 <= radius_um ** 2
+
+
+def membrane_outline(membrane, p, vox):
+    """Step 1 of segment.py, shared with its QC figure: (smoothed membrane,
+    foreground, outline). Foreground is above a global threshold and bright
+    relative to the brightest membrane nearby; the outline is the foreground
+    closed, filled and opened to strip neurites."""
+    smooth = ndi.gaussian_filter(membrane, 0.5)
+    median = np.median(smooth)
+    mad = 1.4826 * np.median(np.abs(smooth - median))
+    local_max = ndi.maximum_filter(smooth, footprint=grid_ball(p["local_window_um"], vox))
+    fg = (smooth > median + p["membrane_threshold_mads"] * mad) & \
+         (smooth - median > p["local_contrast"] * (local_max - median))
+    closed = ndi.binary_closing(fg, grid_ball(p["close_um"], vox), border_value=0)
+    filled = ndi.binary_fill_holes(closed) | np.stack([ndi.binary_fill_holes(plane) for plane in closed])
+    return smooth, fg, ndi.binary_opening(filled, grid_ball(p["neurite_um"], vox))

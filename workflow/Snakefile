@@ -68,6 +68,7 @@ rule all:
         "results/tables/spot_counts.csv",
         "results/tables/neurite_counts.csv",
         "results/figures/counts_by_receptor.pdf",
+        expand("results/figures/segmentation/{sample}_qc.png", sample=SAMPLES),
 
 
 rule ingest:
@@ -94,7 +95,6 @@ rule segment:
         soma="data/processed/{sample}/soma_labels.tif",
         nuclei="data/processed/{sample}/nuclei_labels.tif",
         table="data/processed/{sample}/cells.csv",
-        qc="results/figures/segmentation/{sample}_qc.png",
     params:
         segmentation=config["segmentation"],
     resources:
@@ -103,6 +103,28 @@ rule segment:
         "logs/segment/{sample}.log",
     script:
         "scripts/segment.py"
+
+
+rule segmentation_qc:
+    """QC figure of the segmentation, drawn from the saved labels so display
+    changes do not re-run Cellpose."""
+    input:
+        image= "data/processed/{sample}/image.zarr",
+        soma=  "data/processed/{sample}/soma_labels.tif",
+        nuclei="data/processed/{sample}/nuclei_labels.tif",
+        table= "data/processed/{sample}/cells.csv",
+    output:
+        "results/figures/segmentation/{sample}_qc.png",
+    params:
+        segmentation=config["segmentation"],
+        saturation_percentile=95,  # 99.8 left dim somata too dark to judge
+    resources:
+        # One raw channel (~2.7 GB) plus grid-sized float and label arrays.
+        mem_mb=8000,
+    log:
+        "logs/segmentation_qc/{sample}.log",
+    script:
+        "scripts/segmentation_qc.py"
 
 
 rule detect_spots:

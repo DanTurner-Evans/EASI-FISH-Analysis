@@ -20,17 +20,15 @@
    a thick body (some voxel at least orphan_min_core_um from its surface) that
    is evenly filled with membrane signal (coefficient of variation at most
    orphan_max_cv). Neuropil that survives the opening (D1 dendrites, D3
-   arbours) is patchy, and fibre bundles are thin. Rejected components are
-   drawn grey in the QC figure.
+   arbours) is patchy, and fibre bundles are thin.
+
+The QC figure is drawn by segmentation_qc.py from the saved labels, so it can
+be redrawn without re-running Cellpose.
 
 Everything runs on a grid downsampled by `downsample` (near-isotropic ~0.5 um
 voxels); the label images are written on that grid. A cell with a nucleus
 takes the nucleus's ID, so nuclei_labels.tif identifies each soma's nucleus.
 """
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tifffile
@@ -39,9 +37,8 @@ import zarr
 from cellpose import models
 from scipy import ndimage as ndi
 from skimage.measure import block_reduce
-from skimage.segmentation import find_boundaries
 
-from common import channel_index, setup_logging
+from common import channel_index, membrane_outline, setup_logging
 
 log = setup_logging(snakemake)  # noqa: F821
 
@@ -56,27 +53,12 @@ def load(emission_nm):
                         block, np.mean).astype(np.float32)
 
 
-def ball(radius_um):
-    """Ellipsoidal footprint of the given physical radius on the anisotropic grid."""
-    r = np.floor(radius_um / vox).astype(int)
-    z, y, x = np.ogrid[-r[0]:r[0] + 1, -r[1]:r[1] + 1, -r[2]:r[2] + 1]
-    return (z * vox[0]) ** 2 + (y * vox[1]) ** 2 + (x * vox[2]) ** 2 <= radius_um ** 2
-
-
 membrane = load(p["membrane_emission_nm"])
 dapi = load(p["nuclei_emission_nm"])
 log.info("grid %s, voxel %s um", membrane.shape, vox.round(3))
 
 # --- 1. membrane outline ------------------------------------------------------------
-smooth = ndi.gaussian_filter(membrane, 0.5)
-median = np.median(smooth)
-mad = 1.4826 * np.median(np.abs(smooth - median))
-local_max = ndi.maximum_filter(smooth, footprint=ball(p["local_window_um"]))
-fg = (smooth > median + p["membrane_threshold_mads"] * mad) & \
-     (smooth - median > p["local_contrast"] * (local_max - median))
-closed = ndi.binary_closing(fg, ball(p["close_um"]), border_value=0)
-filled = ndi.binary_fill_holes(closed) | np.stack([ndi.binary_fill_holes(plane) for plane in closed])
-outline = ndi.binary_opening(filled, ball(p["neurite_um"]))
+smooth, fg, outline = membrane_outline(membrane, p, vox)
 components, n_components = ndi.label(outline)
 log.info("membrane foreground %.3f%% of voxels; outline %.3f%% in %d components",
          100 * fg.mean(), 100 * outline.mean(), n_components)
@@ -141,7 +123,7 @@ for k, box in enumerate(ndi.find_objects(soma), 1):
 has_labelled = np.unique(components[is_labelled & outline])
 candidates = [c for c in range(1, n_components + 1)
               if c not in has_labelled and min_soma <= component_volume[c - 1] <= max_soma]
-orphans, rejected = [], np.zeros(soma.shape, bool)
+orphans = []
 component_boxes = ndi.find_objects(components)
 for c in candidates:
     box = component_boxes[c - 1]
@@ -154,8 +136,6 @@ for c in candidates:
              c, component_volume[c - 1], core, cv, "kept" if keep else "rejected")
     if keep:
         orphans.append(c)
-    else:
-        rejected[box] |= own
 orphan_ids = list(range(int(nuclei.max()) + 1, int(nuclei.max()) + 1 + len(orphans)))
 for c, k in zip(orphans, orphan_ids):
     soma[components == c] = k
@@ -186,24 +166,3 @@ for path, labels in [(snakemake.output.soma, soma), (snakemake.output.nuclei, nu
                      metadata={"axes": "ZYX", "spacing": vox[0], "unit": "um"})
 log.info("soma volumes (um3): %s", table.soma_volume_um3.round().tolist())
 
-# --- QC: membrane MIP with cell outlines, and the nucleus score distribution --------
-fig, (ax_img, ax_hist) = plt.subplots(1, 2, figsize=(15, 7), gridspec_kw={"width_ratios": [1.6, 1]})
-mip = membrane.max(axis=0)
-rgb = np.clip(np.dstack([mip] * 3) / np.percentile(mip, 99.8) * [0.2, 1, 0.2], 0, 1)
-rgb[find_boundaries(rejected.max(axis=0))] = 0.55
-rgb[find_boundaries(np.where(np.isin(soma, labelled), soma, 0).max(axis=0))] = [1, 0, 1]
-rgb[find_boundaries(np.where(np.isin(soma, orphan_ids), soma, 0).max(axis=0))] = [0, 0.8, 1]
-ax_img.imshow(rgb, interpolation="nearest")
-for _, row in table.iterrows():
-    ax_img.annotate(str(row.cell_id), (row.x_um / vox[2], row.y_um / vox[1]), color="w", fontsize=8,
-                    xytext=(6, -6), textcoords="offset points")
-ax_img.set(title=f"membrane MIP; {len(labelled)} somata with nucleus (magenta), "
-                 f"{len(orphan_ids)} without (cyan), {len(candidates) - len(orphans)} rejected (grey)",
-           xticks=[], yticks=[])
-ax_hist.hist(inside, bins=np.linspace(0, 1, 33), color="0.6")
-ax_hist.axvline(p["min_nucleus_inside"], color="r")
-ax_hist.set(yscale="log", xlabel="fraction of nucleus core inside membrane outline", ylabel="nuclei",
-            title=f"{len(ids)} nuclei near membrane signal")
-fig.suptitle(snakemake.wildcards.sample)
-fig.tight_layout()
-fig.savefig(snakemake.output.qc, dpi=90)
