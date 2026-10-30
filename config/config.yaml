@@ -45,6 +45,12 @@ spot_filter:
   min_prominence: 0.02           # peaks less prominent than this fraction of the tallest are wiggles
   fallback: 100                  # used, with a warning in the log and QC title, if there is no valley
   overrides: {}                  # {sample: {channel: amplitude}} where the valley is wrong
+  # Defocus ghosts: in 647, a bright punctum throws a cone of light upwards whose
+  # centre, 2-4 um above it, Spotiflow detects as a dimmer spot. A kept spot is
+  # dropped if a brighter kept spot lies within xy_um and dz_um deeper (larger z).
+  # Pairs at that offset were 10-80x chance in C1/B3 647, and at chance in 546.
+  ghosts:
+    "647": {xy_um: 0.4, dz_um: [2.0, 4.0]}
 
 # Index of the driver-line membrane channel in the CZI (used by the MIP rule).
 segmentation_channel: 0

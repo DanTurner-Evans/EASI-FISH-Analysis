@@ -157,8 +157,9 @@ rule filter_spots:
         spots="data/processed/{sample}/spots_{channel}.csv",
         qc="results/figures/spots/{sample}_{channel}_qc.png",
     params:
-        spot_filter={k: v for k, v in config["spot_filter"].items() if k != "overrides"},
+        spot_filter={k: v for k, v in config["spot_filter"].items() if k not in ("overrides", "ghosts")},
         override=lambda wc: amplitude_overrides(wc.sample).get(wc.channel),
+        ghosts=lambda wc: (config["spot_filter"].get("ghosts") or {}).get(wc.channel),
         emission_nm=lambda wc: config["channels"][wc.channel]["emission_nm"],
     log:
         "logs/filter_spots/{sample}_{channel}.log",
@@ -192,7 +193,7 @@ rule inspect:
         segmentation=config["segmentation"],
         channels=list(config["channels"]),
         emission_nm={c: v["emission_nm"] for c, v in config["channels"].items()},
-        spot_filter={k: v for k, v in config["spot_filter"].items() if k != "overrides"},
+        spot_filter={k: v for k, v in config["spot_filter"].items() if k not in ("overrides", "ghosts")},
         overrides=lambda wc: amplitude_overrides(wc.sample),
         crop_um=config["inspect"]["crop_um"],
     resources:
@@ -218,7 +219,7 @@ rule example_plane:
         example=config["example_plane"],
         channels=list(config["channels"]),
         emission_nm={c: v["emission_nm"] for c, v in config["channels"].items()},
-        spot_filter={k: v for k, v in config["spot_filter"].items() if k != "overrides"},
+        spot_filter={k: v for k, v in config["spot_filter"].items() if k not in ("overrides", "ghosts")},
         overrides=lambda wc: amplitude_overrides(wc.sample),
         membrane_emission_nm=config["segmentation"]["membrane_emission_nm"],
         nuclei_emission_nm=config["segmentation"]["nuclei_emission_nm"],
