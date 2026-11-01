@@ -118,6 +118,7 @@ rule segmentation_qc:
     params:
         segmentation=config["segmentation"],
         saturation_percentile=95,  # 99.8 left dim somata too dark to judge
+        exclude_cells=lambda wc: (config.get("exclude_cells") or {}).get(wc.sample, []),
     resources:
         # One raw channel (~2.7 GB) plus grid-sized float and label arrays.
         mem_mb=8000,

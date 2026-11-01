@@ -1,7 +1,8 @@
 """Segmentation QC figure, drawn from segment.py's saved labels.
 
 Left: membrane MIP on the segmentation grid with somata with a nucleus
-(magenta), nucleus-free cells (cyan) and soma-sized outline components that
+(magenta), cells excluded on review (exclude_cells: trachea, fat, dendrites;
+orange), nucleus-free cells (cyan) and soma-sized outline components that
 the nucleus-free filter rejected (grey). The MIP saturates at
 saturation_percentile so dim somata stay visible. Right: the fraction of each
 nucleus's core inside the membrane outline, with the min_nucleus_inside cut.
@@ -34,8 +35,9 @@ membrane = block_reduce(np.asarray(store[channel_index(store, p["membrane_emissi
 soma = tifffile.imread(snakemake.input.soma)
 nuclei = tifffile.imread(snakemake.input.nuclei)
 cells = pd.read_csv(snakemake.input.table)
-with_nucleus = cells.cell_id[cells.has_nucleus].to_numpy()
-without = cells.cell_id[~cells.has_nucleus].to_numpy()
+excluded = cells.cell_id[cells.cell_id.isin(snakemake.params.exclude_cells)].to_numpy()
+with_nucleus = cells.cell_id[cells.has_nucleus & ~cells.cell_id.isin(excluded)].to_numpy()
+without = cells.cell_id[~cells.has_nucleus & ~cells.cell_id.isin(excluded)].to_numpy()
 
 _, _, outline = membrane_outline(membrane, p, vox)
 components, n = ndi.label(outline)
@@ -60,13 +62,15 @@ rgb = np.dstack([g * 0.25, g, g * 0.25])
 rgb[find_boundaries(rejected.max(axis=0))] = 0.6
 rgb[find_boundaries(np.where(np.isin(soma, with_nucleus), soma, 0).max(axis=0))] = [1, 0, 1]
 rgb[find_boundaries(np.where(np.isin(soma, without), soma, 0).max(axis=0))] = [0, 0.8, 1]
+rgb[find_boundaries(np.where(np.isin(soma, excluded), soma, 0).max(axis=0))] = [1, 0.55, 0]
 ax_img.imshow(rgb, interpolation="nearest")
 for _, row in cells.iterrows():
-    ax_img.annotate(str(row.cell_id), (row.x_um / vox[2], row.y_um / vox[1]), color="w", fontsize=8,
+    ax_img.annotate(str(row.cell_id), (row.x_um / vox[2], row.y_um / vox[1]), fontsize=8,
+                    color=(1, 0.55, 0) if row.cell_id in excluded else "w",
                     xytext=(6, -6), textcoords="offset points")
 ax_img.set_title(f"membrane MIP (saturated at {snakemake.params.saturation_percentile:g}th pct)\n"
-                 f"{len(with_nucleus)} somata with nucleus (magenta), {len(without)} without (cyan), "
-                 f"{len(rejected_ids)} rejected (grey)", fontsize=10)
+                 f"{len(with_nucleus)} somata with nucleus (magenta), {len(excluded)} excluded on review "
+                 f"(orange), {len(without)} without (cyan), {len(rejected_ids)} rejected (grey)", fontsize=10)
 ax_img.set(xticks=[], yticks=[])
 ax_hist.hist(inside, bins=np.linspace(0, 1, 33), color="0.6")
 ax_hist.axvline(p["min_nucleus_inside"], color="r")
@@ -75,4 +79,5 @@ ax_hist.set(yscale="log", xlabel="fraction of nucleus core inside membrane outli
 fig.suptitle(snakemake.wildcards.sample)
 fig.tight_layout()
 fig.savefig(snakemake.output[0], dpi=90)
-log.info("%d with nucleus, %d without, %d rejected", len(with_nucleus), len(without), len(rejected_ids))
+log.info("%d with nucleus, %d excluded on review, %d without, %d rejected",
+         len(with_nucleus), len(excluded), len(without), len(rejected_ids))
