@@ -65,9 +65,13 @@ rgb[find_boundaries(np.where(np.isin(soma, without), soma, 0).max(axis=0))] = [0
 rgb[find_boundaries(np.where(np.isin(soma, excluded), soma, 0).max(axis=0))] = [1, 0.55, 0]
 ax_img.imshow(rgb, interpolation="nearest")
 for _, row in cells.iterrows():
-    ax_img.annotate(str(row.cell_id), (row.x_um / vox[2], row.y_um / vox[1]), fontsize=8,
+    # Labels near the right edge go to the left of the cell, so they are not cut off.
+    x, y = row.x_um / vox[2], row.y_um / vox[1]
+    right_edge = x > 0.85 * mip.shape[1]
+    ax_img.annotate(str(row.cell_id), (x, y), fontsize=8,
                     color=(1, 0.55, 0) if row.cell_id in excluded else "w",
-                    xytext=(6, -6), textcoords="offset points")
+                    xytext=(-6 if right_edge else 6, -6), textcoords="offset points",
+                    ha="right" if right_edge else "left", annotation_clip=True)
 ax_img.set_title(f"membrane MIP (saturated at {snakemake.params.saturation_percentile:g}th pct)\n"
                  f"{len(with_nucleus)} somata with nucleus (magenta), {len(excluded)} excluded on review "
                  f"(orange), {len(without)} without (cyan), {len(rejected_ids)} rejected (grey)", fontsize=10)

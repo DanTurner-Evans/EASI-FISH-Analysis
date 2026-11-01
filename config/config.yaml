@@ -81,6 +81,10 @@ segmentation:
                                  # core >= 2.08 um, CV <= 0.39; D1/D3 neuropil CV 0.61-0.99, fibres
                                  # core <= 1.94 um
 
+# Driver lines left out of the whole pipeline (no spots, somata or neurites).
+exclude_lines:
+  D: "Labels neurons other than those of interest; all 13 brains judged bad on QC review."
+
 # Driver lines left out of the soma counts (results/tables/spot_counts.csv) by
 # aggregate.py. Their neurite measurements are kept, as those do not use DAPI.
 exclude_soma_lines:
@@ -92,9 +96,24 @@ exclude_soma_lines:
 # sample's cells.csv: re-check them (in the QC figure) whenever a sample is
 # segmented again, as a rerun can renumber cells.
 exclude_cells:
+  # Calls per cell are in results/figures/segmentation/qc_review.csv.
   B1_brain1: [237]               # dendrites; this scan has no somata
+  B1_brain1b: [1103, 1148, 1570, 1936]           # fat
+  B1_brain2b: [1708]                             # dendrites
+  B2_brain1a: [1586]                             # dendrites
+  B2_brain2a: [5, 2009]                          # dendrites
+  B2_brain2b: [137, 1442]                        # fat, dendrites
   B3_brain1a: [316]              # trachea
+  B3_brain1b: [101, 1426, 1674]                  # trachea
+  B3_brain2a: [331, 603, 723, 1527, 1638, 1876, 3029, 3291]  # fat or dendrites
+  C1_brain1b: [121, 197, 218, 239, 327, 339]     # trachea or fat
+  C1_brain2a: [974, 1110, 1413]                  # dendrites
   C1_brain2b: [13, 14]           # trachea
+  C2_brain1a: [1029, 1566]                       # trachea, dendrites
+  C2_brain1b: [1, 482, 1849]                     # fat, dendrites
+  C2_brain2b: [916]                              # dendrites
+  C3_brain1a: [1708]                             # dendrites
+  C3_brain1b: [374, 584, 710]                    # trachea
   C3_brain2a: [1, 285, 320, 336, 1973, 2001]  # fat globules
   C3_brain2b: [521, 558]         # dendrites or fat globules
 
