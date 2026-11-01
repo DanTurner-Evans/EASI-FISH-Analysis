@@ -92,7 +92,10 @@ exclude_soma_lines:
 # sample's cells.csv: re-check them (in the QC figure) whenever a sample is
 # segmented again, as a rerun can renumber cells.
 exclude_cells:
+  B1_brain1: [237]               # dendrites; this scan has no somata
   B3_brain1a: [316]              # trachea
+  C1_brain2b: [13, 14]           # trachea
+  C3_brain2a: [1, 285, 320, 336, 1973, 2001]  # fat globules
   C3_brain2b: [521, 558]         # dendrites or fat globules
 
 # Neurite spot density (neurites.py). The mask reuses the segmentation's
