@@ -146,9 +146,9 @@ inspect:
 
 # Example figure (example_plane.py): one region, projected over about one spot depth.
 example_plane:
-  sample: D3_brain2a
-  planes: [34, 40]               # first and last z plane, inclusive
-  origin_px: [390, 1089]         # y, x of the top-left corner, full-resolution pixels
+  sample: B3_brain1a
+  planes: [37, 43]               # first and last z plane, inclusive
+  origin_px: [500, 60]           # y, x of the top-left corner, full-resolution pixels
   size_px: 512
 
 # Display settings for the membrane-channel maximum intensity projections.

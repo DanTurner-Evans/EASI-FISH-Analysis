@@ -1,5 +1,5 @@
-"""Scatter plot summarising the soma counts: spots per cell for each receptor
-and driver line.
+"""Scatter plot summarising the soma counts for each receptor and driver line:
+spots per cell, or spots per soma volume (params.value names the column).
 
 Each dot is one brain, summarised by its median cell so brains with many cells
 do not dominate; the short line is the mean of those brain medians. Receptors are ordered by receptor set, then channel, as in config.yaml.
@@ -31,7 +31,7 @@ lines = sorted(df.line_label.unique())
 label = {r.line_label: f"{r.line_label}: {r.driver}, {r.neuron_type}"
          for r in df.drop_duplicates("line_label").itertuples()}
 
-brains = df.groupby(["line_label", "receptor", "sample"]).n_spots.median().rename("median").reset_index()
+brains = df.groupby(["line_label", "receptor", "sample"])[snakemake.params.value].median().rename("median").reset_index()
 log.info("%d cells, %d brains", len(df) // df.channel.nunique(), brains["sample"].nunique())
 
 fig, ax = plt.subplots(figsize=(9, 4.2), facecolor=SURFACE)
@@ -51,7 +51,7 @@ ax.set_xticks(range(len(receptors)))
 ax.set_xticklabels([f"{r}\nset {set_of[r]}" for r in receptors], fontsize=8, color=TEXT_PRIMARY)
 ax.set_xlim(-0.6, len(receptors) - 0.4)
 ax.set_ylim(0, None)
-ax.set_ylabel("mRNA spots per soma", fontsize=9, color=TEXT_SECONDARY)
+ax.set_ylabel(snakemake.params.ylabel, fontsize=9, color=TEXT_SECONDARY)
 ax.tick_params(axis="y", labelsize=8, colors=TEXT_SECONDARY)
 ax.tick_params(axis="x", length=0)
 for side in ("top", "right"):
@@ -69,7 +69,7 @@ handles.append(plt.Line2D([], [], color=TEXT_PRIMARY, linewidth=2))
 names.append("mean of brains")
 ax.legend(handles, names, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, frameon=False, fontsize=8,
           labelcolor=TEXT_PRIMARY, handlelength=1.2, columnspacing=1.5, borderaxespad=0.2)
-ax.set_title("Receptor mRNA per soma: each dot is one brain's median soma", fontsize=10, color=TEXT_PRIMARY,
+ax.set_title(f"{snakemake.params.title}: each dot is one brain's median soma", fontsize=10, color=TEXT_PRIMARY,
              loc="left", pad=24)
 fig.tight_layout()
 for path in snakemake.output:
