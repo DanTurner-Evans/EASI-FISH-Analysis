@@ -73,6 +73,7 @@ rule all:
         "results/tables/spot_counts.csv",
         "results/tables/neurite_counts.csv",
         "results/figures/counts_by_receptor.pdf",
+        "results/figures/soma_summary.pdf",
         expand("results/figures/segmentation/{sample}_qc.png", sample=SAMPLES),
 
 
@@ -348,3 +349,20 @@ rule figures:
         "logs/figures.log",
     script:
         "scripts/plot_counts.py"
+
+
+rule soma_summary:
+    """Scatter plot of spots per soma for each receptor and driver line."""
+    input:
+        "results/tables/spot_counts.csv",
+    output:
+        "results/figures/soma_summary.pdf",
+        "results/figures/soma_summary.png",
+    params:
+        # Receptors in config order: by receptor set, then channel.
+        receptor_order=[r for rs in config["receptor_sets"].values() for r in rs.values()],
+        receptor_set_of={r: k for k, rs in config["receptor_sets"].items() for r in rs.values()},
+    log:
+        "logs/soma_summary.log",
+    script:
+        "scripts/plot_soma_summary.py"
