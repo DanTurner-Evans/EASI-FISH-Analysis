@@ -106,26 +106,33 @@ exclude_soma_lines:
 # sample's cells.csv: re-check them (in the QC figure) whenever a sample is
 # segmented again, as a rerun can renumber cells.
 exclude_cells:
-  # Calls per cell are in results/figures/segmentation/qc_review.csv.
-  B1_brain1: [237]               # dendrites; this scan has no somata
-  B1_brain1b: [1103, 1148, 1570, 1936]           # fat
-  B1_brain2b: [1708]                             # dendrites
-  B2_brain1a: [1586]                             # dendrites
-  B2_brain2a: [5, 2009]                          # dendrites
-  B2_brain2b: [137, 1442]                        # fat, dendrites
-  B3_brain1a: [316]              # trachea
-  B3_brain1b: [101, 1426, 1674]                  # trachea
-  B3_brain2a: [331, 603, 723, 1527, 1638, 1876, 3029, 3291]  # fat or dendrites
-  C1_brain1b: [121, 197, 218, 239, 327, 339]     # trachea or fat
-  C1_brain2a: [974, 1110, 1413]                  # dendrites
-  C1_brain2b: [13, 14]           # trachea
-  C2_brain1a: [1029, 1566]                       # trachea, dendrites
-  C2_brain1b: [1, 482, 1849]                     # fat, dendrites
-  C2_brain2b: [916]                              # dendrites
-  C3_brain1a: [1708]                             # dendrites
-  C3_brain1b: [374, 584, 710]                    # trachea
-  C3_brain2a: [1, 285, 320, 336, 1973, 2001]  # fat globules
-  C3_brain2b: [521, 558]         # dendrites or fat globules
+  # Calls per cell are in results/figures/segmentation/qc_review.csv. Nucleus-free
+  # cells are listed too, so the QC figures show every call.
+  B1_brain1: [237]
+  B1_brain1a: [193, 196, 2808, 2809]
+  B1_brain1b: [1103, 1148, 1570, 1936, 2853, 2854, 2857, 2858, 2859]
+  B1_brain2a: [2601, 2992]
+  B1_brain2b: [1708, 2270, 2271]
+  B2_brain1a: [1586]
+  B2_brain1b: [1740]
+  B2_brain2a: [5, 2009, 2121, 2122, 2123]
+  B2_brain2b: [137, 1442]
+  B3_brain1a: [316, 3080]
+  B3_brain1b: [101, 1426, 1674, 3953, 3955, 3956, 3957]
+  B3_brain2a: [331, 603, 723, 1527, 1638, 1876, 3029, 3291, 3745, 3746, 3747, 3749, 3750, 3751, 3752, 3753, 3754, 3755]
+  B3_brain2b: [1822, 1823]
+  C1_brain1a: [1820, 1821, 1822]
+  C1_brain1b: [121, 197, 218, 239, 327, 339, 2327, 2328, 2329, 2330, 2331, 2332]
+  C1_brain2a: [974, 1110, 1413]
+  C1_brain2b: [13, 14, 2694, 2695, 2696, 2697, 2698, 2699, 2700, 2701, 2702, 2703, 2704, 2705, 2706, 2707, 2708, 2709, 2710, 2711, 2712, 2714, 2715, 2716, 2717, 2718, 2719]
+  C2_brain1a: [1029, 1566, 1898]
+  C2_brain1b: [1, 482, 1849, 2242, 2243, 2244, 2245, 2246, 2247]
+  C2_brain2a: [1673, 1675]
+  C2_brain2b: [916, 1312, 1313]
+  C3_brain1a: [1708, 1853]
+  C3_brain1b: [374, 584, 710]
+  C3_brain2a: [1, 285, 320, 336, 1973, 2001, 2716, 2717, 2718, 2719, 2720, 2721, 2722, 2723, 2724, 2725, 2726, 2727, 2728, 2729, 2730, 2731, 2732, 2733, 2734, 2735, 2736, 2737, 2738, 2739, 2740, 2741, 2742]
+  C3_brain2b: [521, 558, 2243, 2244, 2245, 2246]
 
 # Neurite spot density (neurites.py). The mask reuses the segmentation's
 # membrane_threshold_mads, local_contrast and local_window_um, at full resolution.

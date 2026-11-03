@@ -55,18 +55,18 @@ The four channels in one 3 µm slab through the somata (top row, raw). The botto
 
 ## Results
 
-Soma counts come from 214 somata with a nucleus in 24 brains: 156 in 12 line B brains (ER3p_a/b) and 58 in 12 line C brains (ER4d). Line A is left out for its failed DAPI stain and line D for not labelling the neurons of interest. Each dot is one brain, summarised by its median soma so that brains with many somata do not dominate; the line is the mean of the brains. Tables: `results/tables/spot_counts.csv` (one row per soma and channel) and `results/tables/neurite_counts.csv`.
+Soma counts come from 211 somata with a nucleus in 24 brains: 153 in 12 line B brains (ER3p_a/b) and 58 in 12 line C brains (ER4d). Line A is left out for its failed DAPI stain and line D for not labelling the neurons of interest. Each dot is one brain, summarised by its median soma so that brains with many somata do not dominate; the line is the mean of the brains. Tables: `results/tables/spot_counts.csv` (one row per soma and channel) and `results/tables/neurite_counts.csv`.
 
 Spots per soma:
 
 ![Receptor mRNA spots per soma](results/figures/soma_summary.png)
 
-ER4d somata are larger than ER3p_a/b somata (median 1162 vs 667 µm³), so raw counts are higher in ER4d for every receptor. Normalised by soma volume:
+ER4d somata are larger than ER3p_a/b somata (median 1162 vs 668 µm³), so raw counts are higher in ER4d for every receptor. Normalised by soma volume:
 
 ![Receptor mRNA spots per 100 µm³ of soma](results/figures/soma_density.png)
 
-- Oamb and Octα2R are the most abundant in both neuron types (3.5–5 spots per 100 µm³).
-- Octβ3R is the one receptor clearly denser in ER4d (1.4 vs 0.6 per 100 µm³); Oamb is somewhat denser in ER3p_a/b (4.8 vs 3.5).
+- Oamb and Octα2R are the most abundant in both neuron types (3.5–5.1 spots per 100 µm³).
+- Octβ3R is the one receptor clearly denser in ER4d (1.4 vs 0.6 per 100 µm³); Oamb is somewhat denser in ER3p_a/b (5.1 vs 3.5).
 - Octβ1R, Octβ2R and Octα2R are at similar densities in both; Oct-TyR is near zero in both.
 - Brains agree closely, so these differences are consistent across samples.
 
