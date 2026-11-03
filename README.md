@@ -1,7 +1,7 @@
 # EASI-FISH-Analysis
 
 ## Overview
-Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8) data of octopamine receptor-related mRNAs in the ring neurons of the *Drosophila* central complex
+Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8) data of octopamine receptor-related mRNAs in the ring neurons of the *Drosophila* central complex. The pipeline takes in a raw imaging stack with a membrane tag, DAPI stain, and two different tagged RNAs and outputs the RNA counts per soma.
 
 ## Data naming convention
 
@@ -13,6 +13,7 @@ Analysis of [EASI-FISH](https://www.cell.com/cell/fulltext/S0092-8674(21)01339-8
 | D     | SS17020   | ER1_a       |
 
 Line D is left out of the whole pipeline (`exclude_lines` in `config/config.yaml`): on QC review it did not label the neurons of interest.
+Line A is left out of the soma counts (`exclude_soma_lines`): its DAPI stain failed, so its labelled somata have no nuclei to segment. Its neuron type, ER3p_a/b, is also labelled by line B. Line A's neurite measurements are kept.
 
 | Label | receptor 1, 546 nm | receptor 2, 647 nm |
 |-------|--------------------|--------------------|
@@ -29,7 +30,7 @@ The view can be blank, a, or b, depending on how many different configurations w
 
 Each czi file has four color channels, recorded in a z stack throughout the brain.
 The green channel is a membrane tag for neurons in the given genetic line.
-The 546 and 647 nm channels are the mRNA probes, as described in the second table in the *Data naming convention* section
+The 546 and 647 nm channels are the mRNA probes, as described in the second table in the *Data naming convention* section.
 The fourth channel is DAPI staining.
 
 A maximum intensity projection of the membrane channel shows the field of view: the labelled somata (left), their neurites running as a bundle to the right, and the neuropil they innervate (right). Scale bar 50 µm.
