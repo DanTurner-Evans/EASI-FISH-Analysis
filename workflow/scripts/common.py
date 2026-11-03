@@ -37,10 +37,14 @@ def channel_index(store, emission_nm, tolerance_nm=15):
 def min_amplitude(amplitudes, spot_filter, override=None):
     """Amplitude threshold for one sample and channel, and how it was set.
 
-    The lowest point of the smoothed log10-amplitude histogram between the
-    noise peak (the first peak) and the puncta peak (the tallest after it).
-    Returns (threshold, method) with method "valley", "override" or "fallback"
-    (no second peak, so no valley).
+    Noise is modelled as a Gaussian on the smoothed log10-amplitude histogram:
+    centred on the noise peak (the first peak), with the width of the peak's
+    left half at half height (the right half is overlaid by puncta). The
+    threshold is the first amplitude above the peak where that Gaussian is
+    below max_noise_fraction of the histogram. Puncta often form only a
+    shoulder on the noise peak, with no valley between them.
+    Returns (threshold, method) with method "gaussian", "override" or
+    "fallback" (too few candidates, or the noise never falls that low).
     """
     if override is not None:
         return float(override), "override"
@@ -50,11 +54,14 @@ def min_amplitude(amplitudes, spot_filter, override=None):
     grid = np.linspace(np.log10(2), x.max(), 500)
     density = gaussian_kde(x, bw_method=spot_filter["smoothing"])(grid)
     peaks, _ = find_peaks(density, prominence=spot_filter["min_prominence"] * density.max())
-    if len(peaks) < 2:
+    noise = peaks[0]
+    half = np.flatnonzero(density[:noise + 1] >= density[noise] / 2)[0]
+    sigma = (grid[noise] - grid[half]) / np.sqrt(2 * np.log(2))
+    model = density[noise] * np.exp(-0.5 * ((grid - grid[noise]) / sigma) ** 2)
+    above = np.flatnonzero(model[noise:] < spot_filter["max_noise_fraction"] * density[noise:])
+    if not len(above):
         return float(spot_filter["fallback"]), "fallback"
-    noise, puncta = peaks[0], peaks[1:][np.argmax(density[peaks[1:]])]
-    valley = noise + np.argmin(density[noise:puncta + 1])
-    return float(10 ** grid[valley]), "valley"
+    return float(10 ** grid[noise + above[0]]), "gaussian"
 
 
 def grid_ball(radius_um, vox):

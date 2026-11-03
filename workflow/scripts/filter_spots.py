@@ -1,8 +1,7 @@
 """Keep candidate puncta above the sample's amplitude threshold and draw a QC figure.
 
-The threshold is the valley between the noise and puncta peaks of this
-sample's amplitude histogram (common.min_amplitude), unless overridden in the
-config. For channels listed under spot_filter.ghosts, kept spots sitting just
+The threshold is where this sample's amplitude histogram leaves its noise
+peak (common.min_amplitude), unless overridden in the config. For channels listed under spot_filter.ghosts, kept spots sitting just
 above a brighter kept spot (a defocus ghost of it) are then dropped.
 
 The figure shows the amplitude histogram with the threshold, and kept (green)
@@ -26,7 +25,7 @@ candidates = pd.read_csv(snakemake.input.candidates)
 threshold, method = min_amplitude(candidates.amplitude.to_numpy(), snakemake.params.spot_filter,
                                   snakemake.params.override)
 if method == "fallback":
-    log.warning("no valley between noise and puncta peaks; using the fallback threshold %s", threshold)
+    log.warning("noise peak not separable; using the fallback threshold %s", threshold)
 keep = candidates.amplitude >= threshold
 log.info("%d/%d candidates with amplitude >= %.1f (%s)", keep.sum(), len(candidates), threshold, method)
 
@@ -59,7 +58,7 @@ ax_hist.axvline(threshold, color="r")
 ax_hist.set(xscale="log", xlabel="amplitude (counts above local background)", ylabel="candidates",
             title=f"{keep.sum()} of {len(candidates)} kept; threshold {threshold:.0f} ({method})"
                   + (f", {ghost.sum()} ghosts dropped" if ghost.any() else "")
-                  + (": NO VALLEY, CHECK" if method == "fallback" else ""))
+                  + (": NO NOISE EDGE, CHECK" if method == "fallback" else ""))
 
 # Densest 400 x 400 px region, so the overlay shows the filter where it matters.
 store = zarr.open(snakemake.input.image, mode="r")

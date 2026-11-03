@@ -35,16 +35,26 @@ spot_detection:
 
 # Amplitude filter (amplitude = camera counts above local background). Imaging
 # conditions differ between brains, so each sample and channel gets its own
-# min_amplitude: the lowest point of the smoothed log-amplitude histogram
-# between the noise peak (the first peak) and the puncta peak (the tallest
-# after it). On B3/C1/D3 this gave 51-98 for 546 and 43-163 for 647; in a
-# gallery of C1 647 candidates, those below its valley (43) were mostly noise
-# and those above mostly compact puncta.
+# min_amplitude, where the smoothed log-amplitude histogram leaves its noise
+# peak (the first peak). The noise is modelled as a Gaussian fitted to the
+# peak's left half, and the threshold is where it falls below
+# max_noise_fraction of the histogram. An earlier rule, the valley between the
+# noise and puncta peaks, found no valley in 16 of 37 B/C channels, where the
+# puncta form only a shoulder; where both work they mostly agree (e.g. B3_brain1a
+# 546: 126 vs 99). It fails where the noise peak is broad and merges with the
+# puncta (C2 546): check those QC histograms and set overrides.
 spot_filter:
   smoothing: 0.08                # KDE bandwidth on log10 amplitude (scipy bw_method)
   min_prominence: 0.02           # peaks less prominent than this fraction of the tallest are wiggles
-  fallback: 100                  # used, with a warning in the log and QC title, if there is no valley
-  overrides: {}                  # {sample: {channel: amplitude}} where the valley is wrong
+  max_noise_fraction: 0.1        # threshold where modelled noise is below this share of candidates
+  fallback: 100                  # used, with a warning in the log and QC title, if the noise never falls that low
+  overrides:                     # {sample: {channel: amplitude}} where the rule is wrong
+    # Broad noise peak merged with the puncta, so the Gaussian rule gave 700-1600.
+    # Set by eye from a candidate gallery: compact puncta from ~150, smears below.
+    C2_brain1a: {"546": 150}
+    C2_brain1b: {"546": 150}
+    C2_brain2a: {"546": 150}
+    C2_brain2b: {"546": 150}
   # Defocus ghosts: in 647, a bright punctum throws a cone of light upwards whose
   # centre, 2-4 um above it, Spotiflow detects as a dimmer spot. A kept spot is
   # dropped if a brighter kept spot lies within xy_um and dz_um deeper (larger z).
