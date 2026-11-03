@@ -157,6 +157,9 @@ example_plane:
   planes: [37, 43]               # first and last z plane, inclusive
   origin_px: [500, 60]           # y, x of the top-left corner, full-resolution pixels
   size_px: 512
+  circle_radius_um: 1.0          # plane-by-plane spot figure: radius of the circle round each spot ...
+  spot_half_depth_um: 0.5        # ... drawn in each plane this close to the spot's centre
+  crop_margin_um: 2.0            # ... with panels cropped to the counted somata plus this margin
 
 # Display settings for the membrane-channel maximum intensity projections.
 mip:

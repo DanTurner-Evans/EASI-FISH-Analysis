@@ -54,6 +54,10 @@ The four channels in one 3 µm slab through the somata (top row, raw). The botto
 
    ![Spots assigned to somata in B3_brain1a](results/figures/B3_brain1a_soma_example.png)
 
+   The same somata plane by plane, showing only the spots assigned to them. Each panel is the raw probe signal in one plane, with the contrast set over the whole slab, and the counted somata outlined in white in that plane. A circle marks each spot: solid in the plane nearest its centre, and dashed in the other planes within 0.5 µm. A spot at the edge of a soma can sit just outside the outline, because spots are assigned from the 3D soma mask, which uses 4 × 4 pixel blocks. Drawn by `snakemake results/figures/<sample>_soma_spot_planes.png`.
+
+   ![Spots in somata, plane by plane, in B3_brain1a](results/figures/B3_brain1a_soma_spot_planes.png)
+
 ## Results
 
 Soma counts come from 211 somata with a nucleus in 24 brains: 153 in 12 line B brains (ER3p_a/b) and 58 in 12 line C brains (ER4d). Line A is left out for its failed DAPI stain and line D for not labelling the neurons of interest. Each dot is one brain, summarised by its median soma so that brains with many somata do not dominate; the line is the mean of the brains. Tables: `results/tables/spot_counts.csv` (one row per soma and channel) and `results/tables/neurite_counts.csv`.

@@ -269,6 +269,29 @@ rule soma_example:
         "scripts/soma_example.py"
 
 
+rule soma_spot_planes:
+    """Plane-by-plane view of the raw probe signal and the spots assigned to
+    somata, in the example_plane region."""
+    input:
+        image="data/processed/{sample}/image.zarr",
+        soma= "data/processed/{sample}/soma_labels.tif",
+        table="data/processed/{sample}/cells.csv",
+        spots="data/processed/{sample}/spots_assigned.csv",
+    output:
+        "results/figures/{sample}_soma_spot_planes.png",
+    params:
+        example=config["example_plane"],
+        channels=list(config["channels"]),
+        emission_nm={c: v["emission_nm"] for c, v in config["channels"].items()},
+        receptors=lambda wc: meta(wc.sample)["receptors"],
+        downsample=config["segmentation"]["downsample"],
+        exclude_cells=lambda wc: (config.get("exclude_cells") or {}).get(wc.sample, []),
+    log:
+        "logs/soma_spot_planes/{sample}.log",
+    script:
+        "scripts/soma_spot_planes.py"
+
+
 rule count_per_cell:
     """Assign puncta to somata, tagged nuclear, cytoplasmic or (somata without a
     detected nucleus) unknown, and emit a tidy per-cell table."""
